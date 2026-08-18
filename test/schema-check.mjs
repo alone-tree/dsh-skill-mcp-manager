@@ -24,6 +24,9 @@ const ctx = {
   effect() {
     return () => {};
   },
+  get() {
+    return undefined;
+  },
   logger: { warn() {}, error() {}, info() {} },
 };
 

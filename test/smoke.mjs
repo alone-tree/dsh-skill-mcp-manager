@@ -6,6 +6,7 @@ import { apply, name, inject } from "../lib/index.js";
 
 const registered = [];
 const listeners = new Map();
+const commands = [];
 let cleanup = null;
 
 const ctx = {
@@ -30,6 +31,17 @@ const ctx = {
       if (typeof disposer === "function") void disposer();
     };
     return () => {};
+  },
+  get(name) {
+    if (name === "commands") {
+      return {
+        register(definition) {
+          commands.push(definition);
+          return () => {};
+        },
+      };
+    }
+    return undefined;
   },
   logger: {
     warn: (...args) => console.log("[warn]", ...args),
@@ -70,6 +82,10 @@ for (const tool of registered) {
 }
 if (!listeners.has("agent/pre-step")) {
   console.log("FAIL: missing agent/pre-step listener");
+  failed = true;
+}
+if (!commands.some((c) => c.name === "prepare-uninstall")) {
+  console.log("FAIL: missing prepare-uninstall command");
   failed = true;
 }
 
