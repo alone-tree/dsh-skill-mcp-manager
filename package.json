@@ -17,6 +17,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/skill.js",
     "README.md",
     "README.zh.md",
     "LICENSE"
@@ -37,6 +38,7 @@
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0"
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "yaml": "^2.5.0"
   }
 }
