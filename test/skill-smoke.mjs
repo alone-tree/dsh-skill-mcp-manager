@@ -40,6 +40,9 @@ const ctx = {
     },
   },
   logger: { warn() {}, error() {} },
+  effect() {
+    return () => {};
+  },
 };
 
 registerRecursiveSkillProvider(ctx, dataDir);

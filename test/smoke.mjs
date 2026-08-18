@@ -15,6 +15,11 @@ const ctx = {
       return () => {};
     },
   },
+  skills: {
+    registerProvider() {
+      return () => {};
+    },
+  },
   on(event, handler) {
     listeners.set(event, handler);
     return () => listeners.delete(event);
@@ -29,6 +34,7 @@ const ctx = {
   logger: {
     warn: (...args) => console.log("[warn]", ...args),
     error: (...args) => console.log("[error]", ...args),
+    info: (...args) => console.log("[info]", ...args),
   },
 };
 

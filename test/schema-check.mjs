@@ -13,13 +13,18 @@ const ctx = {
       return () => {};
     },
   },
+  skills: {
+    registerProvider() {
+      return () => {};
+    },
+  },
   on() {
     return () => {};
   },
   effect() {
     return () => {};
   },
-  logger: { warn() {}, error() {} },
+  logger: { warn() {}, error() {}, info() {} },
 };
 
 await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "web" });
