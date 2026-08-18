@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-mcp-manager",
   "description": "DSH host plugin: visual, manageable, injectable Skill & MCP management. Three-tier MCP (eager / on-demand / disabled) with mcp_register / mcp_load / mcp_call tools and a pre-step MCP catalog.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
