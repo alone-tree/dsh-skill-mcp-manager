@@ -68,13 +68,24 @@ Invoke one on-demand tool through the bridge. The server must be loaded first; c
 ## Data
 
 - `~/.dsh/skill-mcp-manager/registry.json` — authoritative registry (version 1, `entries[]`).
+- `~/.dsh/skill-mcp-manager/settings.json` — plugin settings (`customRecursiveDirs`, etc.).
 - Env values may be literals or `$VAR` references to the process environment.
 
 ## Status / roadmap
 
-- **M0 (this release)**: `registry.json` + `mcp_register` / `mcp_load(peek)` / `mcp_call` + pre-step `mcp-catalog` injection + **read-only** reconcile (logs drift against the profile patch).
-- **M1**: recursive Skill scanning (only `<dir>/SKILL.md`), frontmatter enable/disable, system-editor open, cross-platform delete.
-- **M2**: write-back reconcile (managed `disabled: true` shadow entries in `cordis.patch.yml`), eager/on-demand lifecycle UI, `prepare-uninstall`.
+**Done (backend)**
+
+- **M0**: `registry.json` + `mcp_register` / `mcp_load(peek)` / `mcp_call` + pre-step `mcp-catalog` injection + three tiers (eager / on-demand / disabled) + A/B channel.
+- **M1**: recursive Skill provider (any-depth `<dir>/SKILL.md`, including the root itself) + frontmatter parsing + **watcher hot-reload** (no restart to pick up skill changes).
+- **M2**: write-back reconcile (`disabled: true` shadow entries in `cordis.patch.yml`, so config survives uninstall) + `/prepare-uninstall` command (hand entries back to native dsh-mcp-client).
+
+All of the above verified end-to-end in a real DSH (desktop profile).
+
+**Todo (Client UI)**
+
+- SKILL drawer: frontmatter enable/disable switch, cross-platform delete (recycle bin), system-editor open.
+- MCP drawer: tier switching, delete entry, details, secret masking.
+- Entry points: `sidebar.footer.action` + `/skills`, `/mcp` commands.
 
 ## License
 

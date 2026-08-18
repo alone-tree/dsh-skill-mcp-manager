@@ -68,13 +68,24 @@ mcp_register { name, description?, tier?, transport, command?, args?, env?, cwd?
 ## 数据
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— 权威注册表（version 1，`entries[]`）。
+- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs` 等）。
 - env 值可为明文或 `$VAR` 进程环境变量引用。
 
 ## 进度 / 路线
 
-- **M0（本版）**：`registry.json` + `mcp_register` / `mcp_load(peek)` / `mcp_call` + pre-step `mcp-catalog` 注入 + **只读** reconcile（对 profile patch 记录漂移）。
-- **M1**：递归 Skill 扫描（只认 `<dir>/SKILL.md`）、frontmatter 启停、系统编辑器打开、跨平台删除。
-- **M2**：回写 reconcile（`cordis.patch.yml` 里写 `disabled: true` 影子条目）、eager/on-demand 生命周期 UI、`prepare-uninstall`。
+**已完成（后端）**
+
+- **M0**：`registry.json` + `mcp_register` / `mcp_load(peek)` / `mcp_call` + pre-step `mcp-catalog` 注入 + 三档（eager / on-demand / disabled）+ AB 通道。
+- **M1**：递归 Skill provider（任意深度只认 `<dir>/SKILL.md`，含根入口）+ frontmatter 解析 + **watcher 热生效**（改 skill 不用重启）。
+- **M2**：回写 reconcile（往 `cordis.patch.yml` 写 `disabled: true` 影子条目，卸载后配置不丢）+ `/prepare-uninstall` 命令（交还原生 dsh-mcp-client）。
+
+以上均已通过真实 DSH（desktop profile）端到端验证。
+
+**待做（Client UI）**
+
+- SKILL 管理抽屉：frontmatter 启停 Switch、跨平台删除（回收站）、系统编辑器打开。
+- MCP 管理抽屉：档位切换、删除条目、详情、密钥打码。
+- 入口：`sidebar.footer.action` + `/skills`、`/mcp` 命令。
 
 ## License
 
