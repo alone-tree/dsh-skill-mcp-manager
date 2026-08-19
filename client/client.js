@@ -185,6 +185,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     const [detail, setDetail] = useState("");
     const [confirming, setConfirming] = useState("");
     const [output, setOutput] = useState("");
+    const [toolDescMax, setToolDescMax] = useState(150);
+    const [toolDescDraft, setToolDescDraft] = useState("150");
 
     const refresh = useCallback(async (rv) => {
       setLoading(true);
@@ -200,6 +202,33 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     }, []);
 
     useEffect(() => { refresh(false); }, [refresh]);
+
+    useEffect(() => {
+      getJson("/skill-mcp-manager/settings")
+        .then((data) => {
+          const value = data.toolDescriptionMaxLength;
+          if (typeof value === "number" && value > 0) {
+            setToolDescMax(value);
+            setToolDescDraft(String(value));
+          }
+        })
+        .catch(() => {});
+    }, []);
+
+    async function saveToolDesc() {
+      const value = Number(toolDescDraft);
+      if (!Number.isInteger(value) || value <= 0 || value > 5000) {
+        setError("工具描述截断必须是 1–5000 的正整数");
+        return;
+      }
+      try {
+        await postJson("/skill-mcp-manager/settings", { toolDescriptionMaxLength: value });
+        setToolDescMax(value);
+        setNotice("已更新工具描述截断为 " + value);
+      } catch (err) {
+        setError(errText(err));
+      }
+    }
 
     async function toggleReveal() {
       const next = !reveal;
@@ -357,6 +386,19 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           h("button", { type: "button", className: "smx-btn", onClick: () => refresh(reveal) }, "刷新"),
         ),
       ),
+      h("div", { className: "smx-setting" },
+        h("span", { className: "smx-setting__label" }, "工具描述截断（字符）"),
+        h("input", {
+          type: "number",
+          className: "smx-input",
+          value: toolDescDraft,
+          min: 1,
+          max: 5000,
+          onChange: (e) => setToolDescDraft(e.target.value),
+        }),
+        h("button", { type: "button", className: "smx-btn", onClick: saveToolDesc }, "保存"),
+        h("span", { className: "smx-count" }, "当前 " + toolDescMax),
+      ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,
       error ? h(Notice, { kind: "error", onDismiss: () => setError("") }, error) : null,
       loading ? h(Empty, null, "加载中\u2026")
@@ -387,6 +429,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     ".smx-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }",
     ".smx-title { margin:0; font-size:15px; font-weight:600; color:var(--dsw-alias-label-primary); }",
     ".smx-head__meta { display:flex; align-items:center; gap:8px; }",
+    ".smx-setting { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--dsw-alias-border-l1); border-radius:8px; background:var(--dsw-alias-bg-layer-1); }",
+    ".smx-setting__label { font-size:12px; color:var(--dsw-alias-label-secondary); }",
+    ".smx-input { font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); width:72px; }",
     ".smx-count { font-size:12px; color:var(--dsw-alias-label-secondary); }",
     ".smx-btn { font-size:12px; line-height:1; padding:6px 10px; border-radius:6px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); cursor:pointer; }",
     ".smx-btn:hover { border-color:var(--dsw-alias-brand-primary); color:var(--dsw-alias-brand-primary); }",
