@@ -10,3 +10,4 @@
         trialTimeoutMs: 30000
         toolCallTimeoutMs: 60000
         catalogDescriptionMaxLength: 500
+        importNativeMcp: true  # import native dsh-mcp-client rows into the capability library (default on-demand) and take them over

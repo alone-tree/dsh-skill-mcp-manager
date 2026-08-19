@@ -1,6 +1,6 @@
-# dsh-skill-mcp-manager
+# 能力库 (Capability) —— dsh-skill-mcp-manager
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的**宿主级插件**：把 MCP 服务器变成"可视、可管、可注入"的目录；Skill 管理在 M1 落地。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的**宿主级插件**：把 Skill 与 MCP 服务器变成"可视、可管、可注入"的目录。
 
 每个 MCP 服务器三档：
 
@@ -42,6 +42,9 @@ dsh plugin --profile web add dsh-skill-mcp-manager
 | `trialTimeoutMs` | `30000` | `mcp_register` / `mcp_load` 的试连超时。 |
 | `toolCallTimeoutMs` | `60000` | 单次 `tools/call` 超时。 |
 | `catalogDescriptionMaxLength` | `500` | 目录描述截断长度。 |
+| `importNativeMcp` | `true` | 启动时把 `cordis.patch.yml` 里的原生 `dsh-mcp-client` 条目导入能力库（默认 on-demand，原生 disabled 则 disabled）并接管。 |
+
+> 接管说明：开启后，原生 `dsh-mcp-client` 条目会被导入能力库并追加一条 `disabled: true` 覆盖行，原生客户端不再加载它们——能力库成为唯一入口，三档可管、进 `mcp-catalog` 与「能力库」UI。卸载前用 `/mcp prepare-uninstall` 交还原生。
 
 ## 模型工具面
 
@@ -81,11 +84,12 @@ mcp_register { name, description?, tier?, transport, command?, args?, env?, cwd?
 
 以上均已通过真实 DSH（desktop profile）端到端验证。
 
-**待做（Client UI）**
+**已完成（Client UI）**
 
-- SKILL 管理抽屉：frontmatter 启停 Switch、跨平台删除（回收站）、系统编辑器打开。
-- MCP 管理抽屉：档位切换、删除条目、详情、密钥打码。
-- 入口：`sidebar.footer.action` + `/skills`、`/mcp` 命令。
+- 设置面板中的「能力库」section（带 技能 / MCP 两个 tab）。
+- SKILL 管理：frontmatter 启停 Switch、跨平台删除（回收站）、系统编辑器打开；shipped/只读技能仅可查看。
+- MCP 管理：档位切换、删除条目、详情、密钥打码、查看描述/加载/断开。
+- 命令：`/skills`、`/mcp`（聊天内文字摘要）。
 
 ## License
 

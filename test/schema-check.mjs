@@ -30,7 +30,7 @@ const ctx = {
   logger: { warn() {}, error() {}, info() {} },
 };
 
-await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "web" });
+await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "__test__", importNativeMcp: false });
 
 let failed = false;
 for (const d of defs) {

@@ -1,9 +1,8 @@
 window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) => {
 
-  // Pure-JS client bundle (no JSX/TS). Registers two settings sections
-  // (Skills / MCP) plus a sidebar.footer.action popover that hosts the same
-  // two panels. Talks to the host over same-origin HTTP routes mounted by
-  // lib/ui.js.
+  // Pure-JS client bundle (no JSX/TS). Registers one "能力库 (Capability)"
+  // settings section with 技能/MCP tabs. Talks to the host over same-origin
+  // HTTP routes mounted by lib/ui.js.
 
   const React = require("react");
   const h = React.createElement;
@@ -161,11 +160,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
 
     return h("div", { className: "smx" },
       h("div", { className: "smx-head" },
-        h("h2", { className: "smx-title" }, "技能管理"),
-        h("div", { className: "smx-head__meta" },
-          h("span", { className: "smx-count" }, skills ? String(skills.length) + " 个" : ""),
-          h("button", { type: "button", className: "smx-btn", onClick: refresh }, "刷新"),
-        ),
+        h("span", { className: "smx-count" }, skills ? String(skills.length) + " 个技能" : ""),
+        h("button", { type: "button", className: "smx-btn", onClick: refresh }, "刷新"),
       ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,
       error ? h(Notice, { kind: "error", onDismiss: () => setError("") }, error) : null,
@@ -349,9 +345,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
 
     return h("div", { className: "smx" },
       h("div", { className: "smx-head" },
-        h("h2", { className: "smx-title" }, "MCP 管理"),
+        h("span", { className: "smx-count" }, entries ? String(entries.length) + " 个服务器" : ""),
         h("div", { className: "smx-head__meta" },
-          h("span", { className: "smx-count" }, entries ? String(entries.length) + " 个" : ""),
           h("button", { type: "button", className: "smx-btn", onClick: toggleReveal }, reveal ? "隐藏密钥" : "显示密钥"),
           h("button", { type: "button", className: "smx-btn", onClick: () => refresh(reveal) }, "刷新"),
         ),
@@ -364,30 +359,19 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     );
   }
 
-  // ── footer action + popover ──────────────────────────────────────────────
-  function ManagerDialog(props) {
-    const [tab, setTab] = useState(props.initialTab || "skills");
-    return h("div", { className: "smx-modal" },
-      h("div", { className: "smx-modal__backdrop", onClick: props.onClose }),
-      h("div", { className: "smx-modal__panel" },
-        h("div", { className: "smx-modal__bar" },
-          h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, "Skills"),
-          h("button", { type: "button", className: cx("smx-tab", tab === "mcp" && "is-active"), onClick: () => setTab("mcp") }, "MCP"),
-          h("button", { type: "button", className: "smx-modal__close", onClick: props.onClose }, "\u00d7"),
-        ),
-        h("div", { className: "smx-modal__body" }, tab === "skills" ? h(SkillsPanel) : h(McpPanel)),
+  // ── capability section (tabs: 技能 / MCP) ────────────────────────────────
+  function ManagerSection() {
+    const [tab, setTab] = useState("skills");
+    return h("div", { className: "smx" },
+      h("header", { className: "smx-header" },
+        h("h2", { className: "smx-title" }, "能力库 (Capability)"),
+        h("div", { className: "smx-subtitle" }, "管理 Agent 的 Skill 与 MCP"),
       ),
-    );
-  }
-
-  function FooterAction(props) {
-    const [open, setOpen] = useState(false);
-    const wide = props.wide === true;
-    return h("div", { className: "smx-foot" },
-      h("button", { type: "button", className: "smx-foot__btn", onClick: () => setOpen(true) },
-        wide ? "Skills & MCP" : "S/M",
+      h("div", { className: "smx-tabs" },
+        h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, "技能"),
+        h("button", { type: "button", className: cx("smx-tab", tab === "mcp" && "is-active"), onClick: () => setTab("mcp") }, "MCP"),
       ),
-      open ? h(ManagerDialog, { onClose: () => setOpen(false) }) : null,
+      tab === "skills" ? h(SkillsPanel) : h(McpPanel),
     );
   }
 
@@ -441,14 +425,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     ".smx-tool__name { font-family:ui-monospace,monospace; color:var(--dsw-alias-brand-primary); flex-shrink:0; }",
     ".smx-tool__desc { color:var(--dsw-alias-label-secondary); }",
     ".smx-output { margin:0; padding:8px; border-radius:6px; background:var(--dsw-alias-bg-layer-2); color:var(--dsw-alias-label-primary); font-size:11px; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; }",
-    ".smx-foot { position:relative; }",
-    ".smx-foot__btn { border:none; background:none; color:inherit; cursor:pointer; font-size:12px; }",
-    ".smx-modal { position:fixed; inset:0; z-index:1000; }",
-    ".smx-modal__backdrop { position:absolute; inset:0; background:rgba(0,0,0,.35); }",
-    ".smx-modal__panel { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px, calc(100vw - 32px)); max-height:min(80vh, 640px); display:flex; flex-direction:column; background:var(--dsw-alias-bg-overlay); border:1px solid var(--dsw-alias-border-l2); border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.25); overflow:hidden; }",
-    ".smx-modal__bar { display:flex; align-items:center; gap:4px; padding:8px 10px; border-bottom:1px solid var(--dsw-alias-border-l1); }",
-    ".smx-modal__close { margin-left:auto; border:none; background:none; color:var(--dsw-alias-label-secondary); cursor:pointer; font-size:16px; }",
-    ".smx-modal__body { padding:14px; overflow:auto; }",
+    ".smx-header { display:flex; flex-direction:column; gap:2px; }",
+    ".smx-subtitle { font-size:12px; color:var(--dsw-alias-label-secondary); }",
+    ".smx-tabs { display:flex; gap:4px; border-bottom:1px solid var(--dsw-alias-border-l1); padding-bottom:8px; }",
     ".smx-tab { font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid transparent; background:none; color:var(--dsw-alias-label-secondary); cursor:pointer; }",
     ".smx-tab.is-active { color:var(--dsw-alias-brand-primary); border-color:var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); }",
   ].join("\n");
@@ -469,22 +448,10 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     injectCss();
     ctx.slots.inject("settings.section", () => ctx.slots.register({
       name: "settings.section",
-      id: "skills",
+      id: "capability",
       order: 35,
-      label: "Skills",
-    }, SkillsPanel));
-    ctx.slots.inject("settings.section", () => ctx.slots.register({
-      name: "settings.section",
-      id: "mcp",
-      order: 36,
-      label: "MCP",
-    }, McpPanel));
-    ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
-      name: "sidebar.footer.action",
-      id: "skill-mcp-manager",
-      order: 10,
-      label: "Skills & MCP",
-    }, FooterAction));
+      label: "能力库",
+    }, ManagerSection));
   }
 
   return { name, inject, apply };

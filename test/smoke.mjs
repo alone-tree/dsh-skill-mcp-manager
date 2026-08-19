@@ -55,7 +55,8 @@ console.log("inject:", inject.join(","));
 
 await apply(ctx, {
   dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data",
-  profile: "web",
+  profile: "__test__",
+  importNativeMcp: false,
   trialTimeoutMs: 3000,
   toolCallTimeoutMs: 3000,
 });

@@ -1,6 +1,6 @@
-# dsh-skill-mcp-manager
+# Capability (能力库) — dsh-skill-mcp-manager
 
-A **host-level [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin** that turns MCP servers into a visual, manageable, injectable catalog — and (M1) does the same for Skills.
+A **host-level [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin** that turns Skills and MCP servers into a visual, manageable, injectable catalog.
 
 Three tiers per MCP server:
 
@@ -42,6 +42,9 @@ Restart the profile. The plugin lives in the Host composition, so its three tool
 | `trialTimeoutMs` | `30000` | Trial-connection timeout used by `mcp_register` / `mcp_load`. |
 | `toolCallTimeoutMs` | `60000` | Per `tools/call` timeout. |
 | `catalogDescriptionMaxLength` | `500` | Truncation for the pre-step catalog. |
+| `importNativeMcp` | `true` | On boot, import native `dsh-mcp-client` rows from `cordis.patch.yml` into the capability library (default on-demand; disabled when the native row is disabled) and take them over. |
+
+> Takeover: with it enabled, native `dsh-mcp-client` rows are imported into the capability library and an id-targeted `disabled: true` override is appended, so the native client stops loading them — the capability library becomes the single entry point (three tiers, `mcp-catalog`, the "Capability" UI). Run `/mcp prepare-uninstall` before uninstalling to hand them back.
 
 ## Model-facing tools
 
@@ -81,11 +84,12 @@ Invoke one on-demand tool through the bridge. The server must be loaded first; c
 
 All of the above verified end-to-end in a real DSH (desktop profile).
 
-**Todo (Client UI)**
+**Done (Client UI)**
 
-- SKILL drawer: frontmatter enable/disable switch, cross-platform delete (recycle bin), system-editor open.
-- MCP drawer: tier switching, delete entry, details, secret masking.
-- Entry points: `sidebar.footer.action` + `/skills`, `/mcp` commands.
+- "Capability (能力库)" section in Settings with Skills / MCP tabs.
+- Skill management: frontmatter enable/disable switch, cross-platform delete (recycle bin), system-editor open; shipped/read-only skills are view-only.
+- MCP management: tier switching, delete entry, details, secret masking, peek/load/disconnect.
+- Commands: `/skills`, `/mcp` (text summaries in chat).
 
 ## License
 
