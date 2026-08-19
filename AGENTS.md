@@ -7,7 +7,7 @@
 **能力库 (Capability)** —— DeepSeek Harness 宿主级插件，把 **Skill 与 MCP 服务器**变成"可视、可管、可注入"的统一目录。
 
 - **MCP**：三档（eager 原生注册 / on-demand 桥 / disabled），模型工具面三件套 `mcp_register` / `mcp_load(peek)` / `mcp_call`，pre-step `mcp-catalog` 注入，boot 导入并接管原生 `dsh-mcp-client` 条目。
-- **Skill**：递归扫描 `customRecursiveDirs`（任意深度只认 `<dir>/SKILL.md`），frontmatter 启停、跨平台删除、系统编辑器打开、shipped 只读护栏。
+- **Skill**：递归扫描 `customRecursiveDirs`（任意深度只认 `<dir>/SKILL.md`，避免把SKILL下的reference或其他文档也扫进去），frontmatter 启停、跨平台删除、系统编辑器打开、shipped 只读护栏。
 
 ## 目录结构
 
