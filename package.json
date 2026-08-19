@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-mcp-manager",
   "description": "能力库 (Capability) — DSH host plugin: visual, manageable, injectable Skill & MCP management. Three-tier MCP (eager / on-demand / disabled) with mcp_register / mcp_load / mcp_call tools and a pre-step MCP catalog.",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "publishConfig": {
     "access": "public"
   },
@@ -9,6 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/alone-tree/dsh-skill-mcp-manager.git"
   },
+  "homepage": "https://github.com/alone-tree/dsh-skill-mcp-manager",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -29,8 +30,11 @@
     "lib/skill.js",
     "lib/ui.js",
     "client/client.js",
+    "AGENTS.md",
     "README.md",
     "README.zh.md",
+    "docs/screenshot-mcp.png",
+    "docs/screenshot-skills.png",
     "LICENSE"
   ],
   "license": "MIT",
@@ -38,8 +42,11 @@
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
+    "capability",
+    "ability-library",
     "mcp",
     "skill",
+    "catalog",
     "cordis"
   ],
   "peerDependencies": {
