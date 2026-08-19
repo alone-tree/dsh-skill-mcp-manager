@@ -1,6 +1,6 @@
 {
   "name": "dsh-skill-mcp-manager",
-  "description": "能力库 (Capability) — one-stop visual management of DSH Skills & MCP, with MCP on-demand loading, in-session hot reload, and safe native-config takeover.",
+  "description": "能力库 (Capability) — one-stop visual management of DSH Skills & MCP: on-demand MCP loading, in-session hot reload, and SKILL/MCP descriptions viewable in the plugin.",
   "version": "1.0.0",
   "publishConfig": {
     "access": "public"
@@ -33,6 +33,7 @@
     "AGENTS.md",
     "README.md",
     "README.zh.md",
+    "cordis.patch.example.yml",
     "docs/screenshot-mcp.png",
     "docs/screenshot-skills.png",
     "LICENSE"
