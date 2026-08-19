@@ -6,3 +6,4 @@ dist/
 .playwright-mcp/
 pnpm-lock.yaml
 test/patch.yml
+*.tgz
