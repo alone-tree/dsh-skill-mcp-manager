@@ -41,7 +41,8 @@ Restart the profile. The plugin lives in the Host composition, so its three tool
 | `profile` | `web` | Profile whose `cordis.patch.yml` is reconciled. |
 | `trialTimeoutMs` | `30000` | Trial-connection timeout used by `mcp_register` / `mcp_load`. |
 | `toolCallTimeoutMs` | `60000` | Per `tools/call` timeout. |
-| `catalogDescriptionMaxLength` | `500` | Truncation for the pre-step catalog. |
+| `catalogDescriptionMaxLength` | `500` | Truncation for the server description in the catalog. |
+| `toolDescriptionMaxLength` | `150` | Truncation for each tool's **description** in the catalog (tool names are always shown in full). |
 | `importNativeMcp` | `true` | On boot, import native `dsh-mcp-client` rows from `cordis.patch.yml` into the capability library (default on-demand; disabled when the native row is disabled) and take them over. |
 
 > Takeover: with it enabled, native `dsh-mcp-client` rows are imported into the capability library and an id-targeted `disabled: true` override is appended, so the native client stops loading them — the capability library becomes the single entry point (three tiers, `mcp-catalog`, the "Capability" UI). Run `/mcp prepare-uninstall` before uninstalling to hand them back.

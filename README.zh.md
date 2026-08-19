@@ -42,6 +42,7 @@ dsh plugin --profile web add dsh-skill-mcp-manager
 | `trialTimeoutMs` | `30000` | `mcp_register` / `mcp_load` 的试连超时。 |
 | `toolCallTimeoutMs` | `60000` | 单次 `tools/call` 超时。 |
 | `catalogDescriptionMaxLength` | `500` | 目录描述截断长度。 |
+| `toolDescriptionMaxLength` | `150` | 目录里每条工具的**描述**截断长度（工具名始终完整显示）。 |
 | `importNativeMcp` | `true` | 启动时把 `cordis.patch.yml` 里的原生 `dsh-mcp-client` 条目导入能力库（默认 on-demand，原生 disabled 则 disabled）并接管。 |
 
 > 接管说明：开启后，原生 `dsh-mcp-client` 条目会被导入能力库并追加一条 `disabled: true` 覆盖行，原生客户端不再加载它们——能力库成为唯一入口，三档可管、进 `mcp-catalog` 与「能力库」UI。卸载前用 `/mcp prepare-uninstall` 交还原生。

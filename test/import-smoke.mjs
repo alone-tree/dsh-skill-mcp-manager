@@ -24,7 +24,7 @@ const nativePatch = [
   "      config:",
   "        serverName: tavily",
   "        transport: streamable-http",
-  "        url: 'https://mcp.tavily.com/mcp/'",
+  "        url: 'http://127.0.0.1:1/mcp/'",
   "    - id: mcp-off",
   "      name: '@deepseek-ai/dsh-mcp-client'",
   "      config:",
