@@ -1,48 +1,64 @@
 # Capability (能力库) — dsh-skill-mcp-manager
 
-> Manage DSH Skills and MCP servers from one visual page — and only ever let the model see what it needs.
-
-A host-level [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that turns Skills and MCP servers into a **visual, manageable, injectable** capability library.
+One-stop SKILL & MCP manager — a **host-level plugin** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with MCP **on-demand loading**: no more worrying about too many MCP tools burning your tokens.
 
 ## Screenshots
 
-| SKILL management | MCP management |
-| --- | --- |
-| ![SKILL 管理](docs/screenshot-skills.png) | ![MCP 管理](docs/screenshot-mcp.png) |
+MCP management
+![MCP 管理](docs/screenshot-mcp.png)
+
+SKILL management
+![SKILL 管理](docs/screenshot-skills.png)
 
 ## Core features
 
-### 1. One-stop management, one plugin
-Skills **and** MCP servers live in a single Settings page — no two separate plugins. Toggle a skill's model-visibility, delete it to the recycle bin, open it in your system editor; switch an MCP's tier, inspect its tools, mask its secrets, delete it. MCP configuration no longer requires hand-editing `cordis.patch.yml`.
+### 1. One-stop visual management
 
-### 2. Skills: deep scan, external libraries, temporary hide
-- Recursively discovers `<dir>/SKILL.md` at **any depth** — point the plugin at an external skill library and every skill under it appears automatically.
-- Hide a skill from the model (writes `disable-model-invocation`) while your own `/name` slash command **still works** — a temporary hide, not a deletion.
+Which Skills **and** MCPs are installed? Are they enabled? What does each one do? All visible directly in the settings page — **no digging through layers**. Enable/disable and delete MCPs and Skills from the UI, and click a SKILL to view its source (opens with your local default markdown reader).
 
-### 3. MCP on-demand loading — the core idea
-At session start an on-demand server exposes only its **name + short tool descriptions**. The AI knows each tool exists and what it does, without the full schemas. That means:
+### 2. MCP on-demand loading (the core feature, carefully polished)
 
-- **no context bloat** — schemas never enter the request header;
-- **no startup latency** — the server connects only when the AI actually needs it;
-- **no failed-load dead end** — loading is on demand, and a failed load is non-fatal (retry or reload later).
+At session start, an on-demand server exposes only its **name + short tool descriptions**. The AI knows each tool exists and what it does, without the full schemas. That means:
 
-### 4. MCP hot reload
-Updated your own local MCP server? `mcp_load` it right in the session — reconnect, re-list tools, fresh snapshot. **No new session, no DSH restart.**
+- **A balance between token bill and full context** — exposing only the manager means everything else requires a tool call to inspect, which risks the AI never realizing something exists and never going to check what's available; but sending the full schemas bloats the context. This plugin treats MCP and SKILL the same way: it provides the basic **name + description** and lets the AI decide what to load.
+- **No startup latency** — the server connects only when the AI actually needs it.
+- **No failed-load dead end** — loading is on demand, and a failure is non-fatal (retry / reload later).
+
+### 3. In-session MCP hot reload
+
+Updated your own local MCP server? Just `mcp_load` it in the session — reconnect, re-list tools, fresh snapshot. **No new session, no DSH restart — extremely friendly to MCP development.**
+
+### 4. SKILL deep scan, external libraries, temporary hide
+
+- Recursively discovers `<dir>/SKILL.md` at **any depth** — connect any number of external skill-library directories, at any depth, so you can group SKILLs flexibly. The plugin only scans `<dir>/SKILL.md`, so other files in a folder (e.g. `readme.md`, `reference.md`, backup files) are never picked up as skills.
+- Hiding a skill = invisible to the model (writes `disable-model-invocation`), while your `/name` slash command **still works**.
+- Delete moves the whole `<dir>/` folder to the recycle bin — recoverable when needed.
+
+## Other helpful features
+
+To make the plugin easy and reassuring to use, it also includes:
 
 ### 5. Native MCP config takeover — nothing lost on uninstall
-On install, the plugin imports every `@deepseek-ai/dsh-mcp-client` row from the profile's `cordis.patch.yml` into its registry (on-demand by default; already-disabled stays disabled) and takes them over. Uninstall is safe: `/mcp prepare-uninstall` hands every managed entry back to the native client with its full config.
+
+On install it automatically takes over your existing MCP config: every `@deepseek-ai/dsh-mcp-client` row in the profile is imported into the registry and taken over (on-demand by default; already-disabled stays disabled).
+
+Uninstall is safe: whenever an MCP is added, the plugin also syncs the MCP config into the original config file but keeps it **disabled**. `/mcp prepare-uninstall` flips those disabled MCPs back to enabled and hands every managed entry (with full config) back to the native client. **Removing the plugin never loses your MCP config.**
 
 ### 6. Your note on every MCP
-Attach a user note to any server; it is surfaced to the AI in the session catalog and is **never overwritten** by server/developer updates.
+
+Attach a user note to any MCP; it is shown to the AI in the session catalog and is **never overwritten** by server/developer updates. For example: *"If server A goes down, use server B as a backup."*
 
 ### 7. Auto warm-up
-After install, the plugin connects once to fetch real tool names and descriptions, so the catalog is immediately useful — then stays cached.
 
-### 8. Profile-scoped
-The plugin only manages the profile it is installed into — no cross-profile overreach.
+After install the plugin connects once to fetch real tool names and descriptions, so the catalog is immediately useful. The cache is refreshed automatically every time an MCP is loaded.
 
-### 9. Validated registration
-`mcp_register` trial-connects and lists tools **before** persisting — only correctly configured servers are admitted.
+### 8. Validated registration
+
+`mcp_register` **trial-connects + lists tools before persisting** — only correctly configured servers are admitted.
+
+### 9. Profile-scoped only
+
+The plugin only manages the profile it is installed into — no overreach, no misplacement.
 
 ## Install
 
@@ -58,11 +74,11 @@ Then add one row to that profile's `cordis.patch.yml` (see [`cordis.patch.exampl
       name: 'dsh-skill-mcp-manager'
       config:
         dataDir: ''            # empty = ~/.dsh/skill-mcp-manager
-        profile: web           # the profile whose cordis.patch.yml this plugin reconciles
+        profile: web           # write the profile you want to manage
         trialTimeoutMs: 30000
         toolCallTimeoutMs: 60000
         catalogDescriptionMaxLength: 500
-        toolDescriptionMaxLength: 150   # per-tool description truncation in the catalog
+        toolDescriptionMaxLength: 150   # per-tool description truncation in the catalog (adjustable)
         importNativeMcp: true           # take over native dsh-mcp-client rows on boot
 ```
 
@@ -81,15 +97,17 @@ Open **Settings → Capability**:
 
 ### Model-facing tools
 
-Three small, fixed tools — the model never sees the native schemas of on-demand servers.
+The plugin provides three small, fixed tools to manage all on-demand MCPs.
 
-- **`mcp_register`** — add or modify an MCP entry. Trial-connects (30s) + lists tools, then persists. The server's own description / version / title / website / instructions are captured automatically. Reuse it to change tier / parameters / notes; only connection-contract changes re-connect.
+- **`mcp_register`** — add or modify an MCP entry. Trial-connects (30s) + lists tools, then persists; the server's own description / version / title / website / instructions are captured automatically. Reuse it to change tier / parameters / notes; only connection-contract changes re-connect.
+
   ```text
   mcp_register { name, tier?, transport, command?, args?, env?, cwd?, url?, headers?, notes? }
   ```
-  `tier` ∈ `eager` | `on-demand` | `disabled` (default `on-demand`). `notes` is user-maintained and never overwritten.
-- **`mcp_load { name, peek? }`** — load / hot-reload a server and get its full tool definitions + server-declared metadata. `peek: true` only reads the snapshot, never connects or drops a live connection.
-- **`mcp_call { name, tool, args? }`** — invoke one on-demand tool through the bridge (must `mcp_load` first). Structured `args` only — never shell text, never a temp file.
+
+  `tier` ∈ `eager` | `on-demand` | `disabled` (default `on-demand`). `notes` is user-maintained and is not overwritten by developer MCP updates.
+- **`mcp_load { name, peek? }`** — load / hot-reload a server, returns full tool definitions + server-declared metadata. `peek: true` only reads the snapshot — no connect, no disconnect — handy when the AI forgot a tool's parameters and wants a quick peek without interrupting the MCP's live process. Especially friendly for stateful MCPs like browser automation.
+- **`mcp_call { name, tool, args? }`** — invoke an on-demand tool (must `mcp_load` first). Structured `args` only — never shell text, never a temp file.
 
 ## Config
 
@@ -112,9 +130,10 @@ Three small, fixed tools — the model never sees the native schemas of on-deman
 
 ## Future directions
 
-- **Resources & prompts** — server `capabilities` are already recorded at connect time; wiring them up is the next step.
-- **Editing notes in the UI.**
-- **Per-session / per-agent MCP scoping** — today eager servers register host-globally (matching the built-in client); per-agent scoping is a future direction.
+- **MCP Resources & prompts support** — currently only MCP tool calls are supported; other parts of the MCP protocol will be added later.
+- Disable a single tool inside an MCP without affecting the others.
+- Edit each MCP's note (notes) in the UI.
+- View and edit SKILLs in the UI.
 
 ## License
 
