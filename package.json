@@ -1,6 +1,6 @@
 {
   "name": "dsh-skill-mcp-manager",
-  "description": "能力库 (Capability) — DSH host plugin: visual, manageable, injectable Skill & MCP management. Three-tier MCP (eager / on-demand / disabled) with mcp_register / mcp_load / mcp_call tools and a pre-step MCP catalog.",
+  "description": "能力库 (Capability) — one-stop visual management of DSH Skills & MCP, with MCP on-demand loading, in-session hot reload, and safe native-config takeover.",
   "version": "1.0.0",
   "publishConfig": {
     "access": "public"
