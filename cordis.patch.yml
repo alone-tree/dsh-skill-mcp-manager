@@ -1,0 +1,8 @@
+# dsh bundle patch: auto-mounts this plugin when installed via `dsh plugin add`.
+# The profile is detected from the dsh process (`--profile <name>`) when not
+# set in config, so no manual row is required. Users may override this row in
+# their profile's cordis.patch.yml with the same id to set config
+# (dataDir / profile / timeouts).
+- insert:
+    - id: skill-mcp-manager
+      name: 'dsh-skill-mcp-manager'

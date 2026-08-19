@@ -18,6 +18,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "slots"
@@ -33,6 +36,7 @@
     "AGENTS.md",
     "README.md",
     "README.zh.md",
+    "cordis.patch.yml",
     "cordis.patch.example.yml",
     "docs/screenshot-mcp.png",
     "docs/screenshot-skills.png",
