@@ -1,5 +1,7 @@
 # Capability (能力库) — dsh-skill-mcp-manager
 
+[English](README.md) | [简体中文](README.zh.md)
+
 One-stop SKILL & MCP manager — a **host-level plugin** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with MCP **on-demand loading**: no more worrying about too many MCP tools burning your tokens.
 
 ## Screenshots
@@ -111,15 +113,15 @@ The plugin provides three small, fixed tools to manage all on-demand MCPs.
 
 ## Config
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `dataDir` | `~/.dsh/skill-mcp-manager` | Registry/settings directory (`~/` is expanded). |
-| `profile` | `web` | Profile whose `cordis.patch.yml` is reconciled. |
-| `trialTimeoutMs` | `30000` | Trial-connection timeout used by `mcp_register` / `mcp_load`. |
-| `toolCallTimeoutMs` | `60000` | Per `tools/call` timeout. |
-| `catalogDescriptionMaxLength` | `500` | Truncation for the server description in the catalog. |
-| `toolDescriptionMaxLength` | `150` | Truncation for each tool's description in the catalog (tool names always shown in full). Adjustable in the UI. |
-| `importNativeMcp` | `true` | On boot, import native `dsh-mcp-client` rows into the capability library and take them over. |
+| Field                           | Default                      | Meaning                                                                                                        |
+| ------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `dataDir`                     | `~/.dsh/skill-mcp-manager` | Registry/settings directory (`~/` is expanded).                                                              |
+| `profile`                     | `web`                      | Profile whose `cordis.patch.yml` is reconciled.                                                              |
+| `trialTimeoutMs`              | `30000`                    | Trial-connection timeout used by `mcp_register` / `mcp_load`.                                              |
+| `toolCallTimeoutMs`           | `60000`                    | Per `tools/call` timeout.                                                                                    |
+| `catalogDescriptionMaxLength` | `500`                      | Truncation for the server description in the catalog.                                                          |
+| `toolDescriptionMaxLength`    | `150`                      | Truncation for each tool's description in the catalog (tool names always shown in full). Adjustable in the UI. |
+| `importNativeMcp`             | `true`                     | On boot, import native `dsh-mcp-client` rows into the capability library and take them over.                 |
 
 ## Data
 

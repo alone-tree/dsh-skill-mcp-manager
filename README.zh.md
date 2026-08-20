@@ -1,5 +1,7 @@
 # 能力库 (Capability) —— dsh-skill-mcp-manager
 
+[English](README.md) | [简体中文](README.zh.md)
+
 一站式SKILL和MCP管理器，面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的**宿主级插件，并提供MCP工具按需加载功能，再也不用担心MCP工具太多浪费token啦**
 
 ## 页面截图
