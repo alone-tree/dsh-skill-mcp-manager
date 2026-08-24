@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [未发布] — 2026-08-24
+
+### Fixed
+
+- 上下文压缩后 `mcp-catalog` 不再注入：改为按会话 surface 上可见的 digest 判断是否重注（对齐内建 `skill-catalog`），不再用进程内 WeakMap。压缩把旧目录移出 surface 后会重新追加。测试：`test/catalog-smoke.mjs`。
+
 ## [1.0.0] — 2026-08-19
 
 ### Added

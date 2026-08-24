@@ -231,13 +231,13 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 5.9 启动注入（ContextInjector）
 
-- `agent/pre-step` enter 模式，source kind `mcp-catalog`：eager 全量（名字+描述+工具名+工具描述+参数概要）；on-demand 概要（名字+描述+工具名+notes）。数据源 = registry 快照（只读不连接）；digest 驱动追加替换、显式失效旧名字。
+- `agent/pre-step` enter 模式，source kind `mcp-catalog`：eager 全量（名字+描述+工具名+工具描述+参数概要）；on-demand 概要（名字+描述+工具名+notes）。数据源 = registry 快照（只读不连接）；digest 驱动追加替换。是否已注入以会话 surface 上可见的 `mcp-catalog` 为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加；不要用进程内 WeakMap 记住 digest。
 - 参数概要预算：properties 键名 + 必填标记 + 单项描述截断（默认每工具 ≤ 300 字，settings.json 可调）。
 
 ### 5.10 系统配置 reconcile（防"删插件丢配置"，仅所在 profile）
 
 1. **add 成功即写兜底**：**所有档位（含 on-demand）**都写完整 dsh-mcp-client 实例 + **条目顶层 `disabled: true`**（`disabled` 是 loader 行级字段，与 `id`/`name`/`config` 同级，**不是** dsh-mcp-client 的 config 字段）+ `# managed by skill-mcp-manager` 注释（插件在时由加载器驱动、静态实例禁用防双注册）。
-2. **每次启动 reconcile（双向对齐）**：patch 有 registry 无 → 导入；registry managed 有 patch 缺失/被 AI 改 → 回写补齐；参数漂移 → 以 registry 为准回写 + diff 高亮。AI 改过原生配置也不会丢。
+2. **每次启动 reconcile（双向对齐）**：patch 有 registry 无 → 导入；registry managed 有 patch 缺失/被 AI 改 → 回写补齐；参数漂移 → 以 registry 为准回写 + diff 高亮。AI 改过原生配置也不会丢。回写范围只替换 `cordis.patch.yml` 里本插件起止标记之间的 MCP 托管行（影子 insert + 接管行）；标记前与结束标记后 byte-for-byte 保留，夹在中间的非 MCP 挪到结束标记之后。
 3. **按条目全量回写（replace 整 config）**：编辑/档位 → 把**该条目完整 config** 回写进 patch（patch 只支持整 config 替换、不做字段级合并）；删除 → 整条移除该条目（见下条）；写前备份 `.bak-<timestamp>`。
 4. **卸载保障**（两个不同操作，勿混）：
    - **删除单个 MCP 条目**（UI"删除条目"）：把该条目**从 `registry.json` 和 `cordis.patch.yml` 一起删除**——删的是**整条 insert 条目**（`id` + `name` + `config` + `disabled` 整个 MCP 配置块），不是只删 `disabled: true` 这一行，更不是翻 `disabled`。
@@ -258,7 +258,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ## 6. 注入与 KV 缓存设计（统一原则）
 
-1. 只追加不改写；digest 驱动；source kinds：`skill-catalog`（内建）、`mcp-catalog`（本插件）。
+1. 只追加不改写；digest 驱动；source kinds：`skill-catalog`（内建 `dsh-tool-skill`）、`mcp-catalog`（本插件）。两者都以会话 surface 上是否还有可见目录判断是否重注；压缩后旧目录不在 surface 上则重新追加。
 2. 前缀失效仅发生在"模型可见工具 schema 集合运行中变化"（§5.6 总表）；注入消息永远只走尾部追加。
 
 ---

@@ -1,6 +1,6 @@
 # AGENTS — dsh-skill-mcp-manager 开发维护指南
 
-面向未来 AI / 人类开发者。改代码前先读这份文件 + `docs/DESIGN.zh.md`（完整设计）+ `docs/HANDOFF.md`（交接）。
+面向未来 AI / 人类开发者。改代码前先读这份文件 + `docs/DESIGN.zh.md`（程序架构）+ `docs/HANDOFF.md`（交接）+ `IDEAS.md`（未实现想法）。
 
 ## 项目是什么
 
@@ -17,8 +17,16 @@ lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvo
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
 test/*.mjs      单元/冒烟测试（基线全绿：node test/*.mjs）
-docs/           设计（DESIGN.zh.md）、交接（HANDOFF.md）、截图
+IDEAS.md        未实现想法
+CHANGELOG.md    已实现变更日志（最新在最上）
+docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 ```
+
+## 文档维护
+
+- **未实现的想法**只记入 `IDEAS.md`：写用户原话与原意，标未定/需确认项；不要把实现方案写进去。
+- **已实现后**：从 `IDEAS.md` 移除该条，记入 `CHANGELOG.md`（最新一节放在文件最上），并同步更新 `docs/DESIGN.zh.md`（程序架构：行为、注入、数据流、已定决策）。本文件里被改动触及的约定、测试清单、目录结构一并改。
+- 不要把已落地内容留在 `IDEAS.md`，也不要只改代码不改架构文档。
 
 ## 架构
 
@@ -34,7 +42,7 @@ docs/           设计（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— MCP 注册表（权威）。
 - `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`）。
-- `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：托管块（MANAGED_MARKER 之后）= 影子条目 + 原生条目 `disabled:true` 接管行。
+- `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：托管块（`MANAGED_MARKER` 与 `MANAGED_END_MARKER` 之间）= 影子条目 + 原生条目 `disabled:true` 接管行。
 
 ### 每次启动顺序（lib/index.js 的 apply → startup）
 
@@ -53,8 +61,8 @@ docs/           设计（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **元信息字段**：`serverName / serverVersion / serverTitle / serverDescription / websiteUrl / instructions / capabilities / metaFetchedAt`，由 `applyServerMetadata(entry, connection)` 在连接时填充，只读。
 - **导入接管 = 两阶段靠档位规避**：默认 on-demand 不注册原生工具，所以「导入 + 写 disabled」能在同一次 boot 完成、无重名冲突；若某条目被用户切成 eager，才回到「关原生防重名」语义（依赖接管行已写好）。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
-- **只 append/替换托管块**：`reconcile` 从 `MANAGED_MARKER` 起整段重写，用户原生段（marker 之前）byte-for-byte 保留；写前 `.bak-<ts>` 备份。
-- **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 工具名/描述；变了才重新注入（追加替换，不改历史）。
+- **只替换起止标记之间**：`reconcile` / `prepare-uninstall` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 中间的本插件 MCP 行（影子 insert + 接管行）；标记前、结束标记后 byte-for-byte 保留。夹在中间的非 MCP 原样挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
+- **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 工具名/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。
 
 ## 编码约定
 
@@ -79,6 +87,7 @@ node test/watcher-smoke.mjs    # watcher 热生效
 node test/import-smoke.mjs     # 原生导入 + 接管（隔离 DSH_HOME，勿连真实网络）
 node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
+node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 
 # 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
 cd ~/.dsh/profiles/desktop
