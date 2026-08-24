@@ -82,7 +82,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 4.1 扫描与递归规则（已定）
 
-- **原生目录**：复用内建 filesystem provider（`<dshHome>/skills` 等），UI 经 `ctx.skills.list` 展示。
+- **原生目录**：复用内建 filesystem provider（`<dshHome>/skills` 等），UI 经 `ctx.skills.list({ scope })` 展示。内建 `dsh-skill-filesystem` 挂在 agent preset 层，不是本插件的全局层；管理页无当前 agent，要用 `agentPresets.standingKeyFor()` 作为 scope（与 host `skill.list` 冷读一致），否则只能看到本插件递归扫描的 Skill，看不到 `~/.dsh/skills` 里经 Junction 接入的条目（如 `capability-entry`）。
   - **仅管理 bundle 型（`<dir>/SKILL.md`）**：内建 provider 也会发现平铺 `<name>.md`，但本插件只认 bundle——平铺 `.md` 条目在 UI 中过滤不展示、不启停、不删除（避免把无关说明文档当技能管理）。
 - **外接递归目录**：自建 provider（`ctx.skills.registerProvider`）：
   - 配置：`customRecursiveDirs`（settings.json），例如只加一个 `global-skills` 文件夹即自动递归扫描其下所有 skill。

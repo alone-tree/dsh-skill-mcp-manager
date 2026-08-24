@@ -60,6 +60,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **本地 `description` 已删除**：描述完全来自服务器自报 `serverDescription`；`mcp_register` 无 `description` 参数。`notes` 是用户维护，永不被覆盖。
 - **元信息字段**：`serverName / serverVersion / serverTitle / serverDescription / websiteUrl / instructions / capabilities / metaFetchedAt`，由 `applyServerMetadata(entry, connection)` 在连接时填充，只读。
 - **导入接管 = 两阶段靠档位规避**：默认 on-demand 不注册原生工具，所以「导入 + 写 disabled」能在同一次 boot 完成、无重名冲突；若某条目被用户切成 eager，才回到「关原生防重名」语义（依赖接管行已写好）。
+- **管理页 Skill 列表要带 preset scope**：内建 `dsh-skill-filesystem` 挂在 agent preset 层。`ctx.skills.list()` 不传 `scope` 只看全局层（本插件递归 provider）；AI 目录注入传 `scope: agent` 所以能看到 `~/.dsh/skills`。Host UI 用 `ctx.get("agentPresets")?.standingKeyFor()` 作为 scope。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
 - **只替换起止标记之间**：`reconcile` / `prepare-uninstall` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 中间的本插件 MCP 行（影子 insert + 接管行）；标记前、结束标记后 byte-for-byte 保留。夹在中间的非 MCP 原样挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
 - **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 工具名/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。

@@ -11,6 +11,9 @@ const routes = [];
 const commands = [];
 let effectDisposer = null;
 let preStepListener = null;
+let listedWith = null;
+let gotWith = null;
+const PRESET_SCOPE = { kind: "preset-standing" };
 
 const WRITABLE = {
   name: "my-skill",
@@ -28,6 +31,14 @@ const SHIPPED = {
   provider: "skill-mcp-manager-recursive",
   invocation: { modelInvocable: true, userInvocable: true },
 };
+const JUNCTION = {
+  name: "capability-entry",
+  description: "Capability library entry",
+  path: "C:/Users/Zinger/.dsh/skills/capability-entry/SKILL.md",
+  source: "user-dsh",
+  provider: "filesystem",
+  invocation: { modelInvocable: true, userInvocable: true },
+};
 
 const ctx = {
   tools: {
@@ -40,14 +51,21 @@ const ctx = {
     registerProvider() {
       return () => {};
     },
-    async list() {
+    async list(options = {}) {
+      listedWith = options;
+      const scoped = options.scope === PRESET_SCOPE ? [JUNCTION] : [];
       return [
         { name: "my-skill", description: "A user skill", invocation: WRITABLE.invocation, source: "custom", provider: "skill-mcp-manager-recursive" },
         { name: "cordis-plugin-development", description: "Develop dynamic plugins", invocation: SHIPPED.invocation, source: "custom", provider: "skill-mcp-manager-recursive" },
+        ...scoped.map((skill) => ({ name: skill.name, description: skill.description, invocation: skill.invocation, source: skill.source, provider: skill.provider })),
       ];
     },
-    async get(name) {
-      return name === "my-skill" ? WRITABLE : SHIPPED;
+    async get(name, options = {}) {
+      gotWith = options;
+      if (name === "my-skill") return WRITABLE;
+      if (name === "cordis-plugin-development") return SHIPPED;
+      if (name === "capability-entry" && options.scope === PRESET_SCOPE) return JUNCTION;
+      return undefined;
     },
   },
   on(event, handler) {
@@ -74,6 +92,9 @@ const ctx = {
           return () => {};
         },
       };
+    }
+    if (name === "agentPresets") {
+      return { standingKeyFor: async () => PRESET_SCOPE };
     }
     return undefined;
   },
@@ -141,6 +162,10 @@ for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/togg
   if (res.status !== 200) failed.push("skills GET status != 200");
   if (writable?.readonly !== false) failed.push("my-skill should be writable");
   if (shipped?.readonly !== true) failed.push("cordis-plugin-development should be readonly");
+  const junction = skills.find((s) => s.name === "capability-entry");
+  if (junction === undefined) failed.push("capability-entry missing without preset scope");
+  if (listedWith?.scope !== PRESET_SCOPE) failed.push("listSkills did not pass preset standing scope");
+  if (gotWith?.scope !== PRESET_SCOPE) failed.push("listSkills get() did not pass preset standing scope");
 }
 
 // toggleSkill on a read-only skill must be refused (400 + error), no write.
