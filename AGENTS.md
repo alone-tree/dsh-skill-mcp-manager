@@ -97,6 +97,20 @@ pnpm add "file:D:/Github/dsh-skill-mcp-manager"
 # 然后重启 DSH
 ```
 
+## 发布（GitHub ↔ npm 必须同步，同等重要）
+
+**每次发新版，GitHub 发布和 npm `publish` 都要一起做，缺一不可、同等重要。** 不要只推 GitHub 而漏发 npm，也不要只发 npm 而不同步 GitHub。
+
+- **版本号必须一致**：`package.json` 的 `version` 与 GitHub 发布的 tag 必须相同；npm 同一版本号**不能重复发布**。
+- **为什么 npm 不能漏**：市场（`dsh-market`，包括 DSH Desktop）从 npm registry 安装，且**托管安装只认"已发布且版本号精确"的包**——只更新 GitHub、npm 不发，用户既装不了新品也更不了级。
+- **流程（每次发版）**：
+  1. 改 `package.json` 的 `version`（bump）
+  2. 跑一遍测试基线全绿（`node test/*.mjs`）+ `node --check` 语法检查
+  3. `npm publish`（需登录 + 2FA）
+  4. 提交并推 GitHub，打同名 tag（如 `v1.0.1`）
+  5. 确认 `https://registry.npmjs.org/<name>/latest` 返回该精确版本
+- **发布成功后市场才能安装/更新**；否则报 `DSH Desktop managed installation requires an npm package with an exact published version`。
+
 ## 常见坑
 
 - **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。
