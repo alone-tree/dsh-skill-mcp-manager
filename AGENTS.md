@@ -116,4 +116,5 @@ pnpm add "file:D:/Github/dsh-skill-mcp-manager"
 - **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。
 - **import-smoke 的 MCP URL 用本地死端口**（`http://127.0.0.1:1/`）：预热会尝试连接，别让它真连外部服务。
 - **前端加了新的 GET+POST 同 path 路由**：必须合并成单条 handler（见上文）。
+- **bundle 自动挂载 + 用户补丁旧 insert 行 = 组合无法启动**（2026-08-28 实际发生过）：包自带的 `cordis.patch.yml`（`dsh.bundle.patch`）会自动 insert 挂载行；从手动挂载时代升级过来的 profile 若还留着同 id 的手写 insert 行，组合里出现两行同 id，所有插件更新的 trial 校验都会失败回滚，且**下次重启无法启动**。修复：用户补丁里改成同 id 的纯配置覆盖行（不写 insert）。本机 desktop profile 已于 2026-08-28 修复并校验通过。
 - **新增配置项**：记得同步 `Config` schema、`cordis.patch.example.yml`、README 配置表。
