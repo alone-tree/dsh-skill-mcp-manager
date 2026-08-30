@@ -1,0 +1,47 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Check syntax
+        run: |
+          node --check lib/index.js
+          node --check lib/skill.js
+          node --check lib/ui.js
+          node --check client/client.js
+
+      - name: Run tests
+        run: |
+          node test/smoke.mjs
+          node test/schema-check.mjs
+          node test/skill-smoke.mjs
+          node test/watcher-smoke.mjs
+          node test/import-smoke.mjs
+          node test/ui-smoke.mjs
+          node test/frontmatter-smoke.mjs
+          node test/catalog-smoke.mjs
+
+      - name: Publish
+        run: npm publish --provenance --access public
