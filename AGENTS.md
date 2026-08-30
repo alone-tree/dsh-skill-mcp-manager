@@ -16,7 +16,7 @@ lib/index.js    宿主主模块：MCP 三件套、连接/快照、导入接管�
 lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvocation）
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
-test/*.mjs      单元/冒烟测试（基线全绿：node test/*.mjs）
+test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
 docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
@@ -78,7 +78,10 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 pnpm install --config.auto-install-peers=true
 
 # 语法检查
-node --check lib/index.js lib/skill.js lib/ui.js client/client.js
+node --check lib/index.js
+node --check lib/skill.js
+node --check lib/ui.js
+node --check client/client.js
 
 # 测试基线（全绿）
 node test/smoke.mjs            # 三件套 + 命令注册
@@ -101,14 +104,17 @@ pnpm add "file:D:/Github/dsh-skill-mcp-manager"
 
 **每次发新版，GitHub 发布和 npm `publish` 都要一起做，缺一不可、同等重要。** 不要只推 GitHub 而漏发 npm，也不要只发 npm 而不同步 GitHub。
 
-- **版本号必须一致**：`package.json` 的 `version` 与 GitHub 发布的 tag 必须相同；npm 同一版本号**不能重复发布**。
-- **为什么 npm 不能漏**：市场（`dsh-market`，包括 DSH Desktop）从 npm registry 安装，且**托管安装只认"已发布且版本号精确"的包**——只更新 GitHub、npm 不发，用户既装不了新品也更不了级。
+- **版本号必须一致**：`package.json` 的 `version` 与 Git tag 必须相同（如 `1.0.1` / `v1.0.1`）；npm 同一版本号**不能重复发布**。
+- **为什么 npm 不能漏**：市场（`dsh-market`，包括 DSH Desktop）从 npm registry 安装，且**托管安装只认“已发布且版本号精确”的包**——只更新 GitHub、npm 不发，用户既装不了新品也更不了级。
+- **发布认证**：npm 包已配置 GitHub Actions Trusted Publisher（OIDC），对应仓库 `alone-tree/dsh-skill-mcp-manager` 和 `.github/workflows/publish.yml`；不依赖某台电脑的 npm 登录、Token 或 OTP。npm 包页面的 Trusted Publisher 必须允许 `npm publish`。
+- **自动发布工作流**：`.github/workflows/publish.yml` 在推送 `v*.*.*` tag 时自动运行语法检查、发布基线测试，并执行 `npm publish --provenance --access public`。发布基线是上方显式列出的测试，不要用 `node test/*.mjs`（其中 `e2e-playwright.mjs` 需要真实运行时）。
 - **流程（每次发版）**：
-  1. 改 `package.json` 的 `version`（bump）
-  2. 跑一遍测试基线全绿（`node test/*.mjs`）+ `node --check` 语法检查
-  3. `npm publish`（需登录 + 2FA）
-  4. 提交并推 GitHub，打同名 tag（如 `v1.0.1`）
-  5. 确认 `https://registry.npmjs.org/<name>/latest` 返回该精确版本
+  1. 修改 `package.json` 的 `version`（bump）和 `CHANGELOG.md`
+  2. 按上方显式清单运行语法检查和发布基线测试
+  3. 提交并推送 `main`
+  4. 创建并推送同名 tag（如 `git tag v1.0.1 && git push origin v1.0.1`）
+  5. 等待 GitHub Actions 成功，并确认 `https://registry.npmjs.org/<name>/latest` 返回该精确版本
+- **跨电脑发布**：发布由 GitHub Actions 执行，不绑定当前电脑；任何有仓库推送权限的电脑，或 GitHub 网页创建带新 tag 的 Release，都可以触发。当前工作流监听 tag push，复用已有 tag 不会重新发布。
 - **发布成功后市场才能安装/更新**；否则报 `DSH Desktop managed installation requires an npm package with an exact published version`。
 
 ## 常见坑
