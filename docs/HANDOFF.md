@@ -16,8 +16,9 @@
 | M0 | `registry.json` + `mcp_register`/`mcp_load(peek)`/`mcp_call` 三件套 + pre-step `mcp-catalog` 注入 + 三档 eager/on-demand/disabled + AB 通道（eager 原生注册、on-demand 走桥） |
 | M1 | 递归 skill provider（任意深度只认 `<dir>/SKILL.md`，含根入口）+ frontmatter 解析 + **watcher 热生效**（改 skill 不用重启） |
 | M2 | 回写 reconcile（往 `cordis.patch.yml` 写 `disabled: true` 影子条目）+ `/prepare-uninstall` 命令（交还原生 dsh-mcp-client） |
-| M3 | Client 管理页：Skill 启停/打开/删除，MCP 档位/详情/密钥/加载/断开/删除，以及同源 HTTP RPC |
+| M3 | Client 管理页：Skill 启停/打开/删除，MCP 档位/详情/密钥/刷新快照/删除，以及同源 HTTP RPC |
 | 单工具禁用 | `disabledTools` 黑名单；新工具默认启用；管理页逐工具“启用/禁用”下拉框；目录/load 隐藏 + eager/bridge 双调用边界拒绝 |
+| 会话隔离 | 每个 DSH 会话（含子代理）独立 MCP 实例；eager 注册到 `agent.ctx`；管理页无已连接/断开 |
 
 - 现有 Host 侧模块：`lib/index.js`（MCP 三件套 + 注入 + reconcile + 单工具黑名单 + UI handlers）、`lib/skill.js`（递归 provider + watcher）、`lib/ui.js`（同源 HTTP 路由和文件操作）。
 - 现有 Client：`client/client.js`，在 `settings.section` 注册“能力库”，包含技能/MCP 两个标签页。
@@ -25,7 +26,8 @@
 
 ## 当前状态
 
-- 已实现设计文档中的 Host、Client 管理功能；后续按 `IDEAS.md` 中未定想法继续迭代。
+- MCP 运行实例已按会话隔离；配置仍全局共享。后续按 `IDEAS.md` 中未定想法继续迭代。
+- 真机验证（2026-08-31）：思源桥双会话各自独立进程、并发读取不同文档互不干扰，子代理实例随会话自动回收；父会话浏览器页面不被子代理覆盖。已知边界：playwright 默认持久 profile 全机单例，第二会话并行用浏览器需在该条目加 `--isolated`（MCP 配置项，未改）。
 - MCP 单工具禁用的安全边界：禁用工具不注册/不注入/不由 `mcp_load` 返回；即使模型记住旧名称，eager `execute` 与 `mcp_call` 仍会在发出 MCP 调用前拒绝。
 - 禁用不取消已经开始执行的调用。`mcp_register` 不开放黑名单修改参数，只有管理 UI 能修改。
 

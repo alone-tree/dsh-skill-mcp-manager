@@ -2,7 +2,7 @@
 
 > 版本：v1.0（讨论稿，全量整合）
 > 已定决策：
-> ① SKILL 启停走 frontmatter（`disable-model-invocation`）；② 本轮只出设计文档；③ 对齐 Hermes Agent 提案（NousResearch/hermes-agent #84225 / #71290 / #84195 / #84189，作者 alone-tree）；④ 注册表用 **JSON**（`registry.json` / `settings.json`），与系统配置**双写兜底**；⑤ 三档术语 **eager / on-demand / disabled**（不用 resident/off）；⑥ **AB 通道：eager 原生注册，on-demand 走 `mcp_call` 桥（前缀零失效）**；⑦ load=reload 合一，`mcp_load(peek)` 只查看描述；⑧ 启动不刷新，只有加载时刷新注册表；⑨ 只维护插件所在 profile；⑩ 每次启动 reconcile；⑪ add 成功即写系统配置兜底；⑫ 参数通道硬约束：结构化 JSON-RPC，禁止 shell 拼接；⑬ **模型工具面三件套：`mcp_register` / `mcp_load(peek)` / `mcp_call`**，删除/断开无工具（仅 UI，生命周期自动管理，**无空闲超时**）；⑭ **SKILL 零新增工具**；⑮ 递归扫描只见 `<dir>/SKILL.md`（不扫裸 md）；⑯ UI 按 SKILL 路径排序，用系统自带编辑器打开；⑰ 删除跨平台；⑱ 密钥允许明文或 `$VAR`；⑲ 其他插件的技能/工具默认不纳入本插件管理；⑳ on-demand→eager 升档**立即生效**（host 级全局注册、一次前缀失效、UI 弹窗提示、无需二次确认）；㉑ MCP 单工具启停采用持久化 `disabledTools` 黑名单，新发现工具默认启用，禁用工具对模型完全隐藏且在原生/桥调用边界强制拒绝
+> ① SKILL 启停走 frontmatter（`disable-model-invocation`）；② 本轮只出设计文档；③ 对齐 Hermes Agent 提案（NousResearch/hermes-agent #84225 / #71290 / #84195 / #84189，作者 alone-tree）；④ 注册表用 **JSON**（`registry.json` / `settings.json`），与系统配置**双写兜底**；⑤ 三档术语 **eager / on-demand / disabled**（不用 resident/off）；⑥ **AB 通道：eager 原生注册，on-demand 走 `mcp_call` 桥（前缀零失效）**；⑦ load=reload 合一，`mcp_load(peek)` 只查看描述；⑧ 启动不刷新，只有加载时刷新注册表；⑨ 只维护插件所在 profile；⑩ 每次启动 reconcile；⑪ add 成功即写系统配置兜底；⑫ 参数通道硬约束：结构化 JSON-RPC，禁止 shell 拼接；⑬ **模型工具面三件套：`mcp_register` / `mcp_load(peek)` / `mcp_call`**，删除/断开无工具（仅 UI，生命周期自动管理，**无空闲超时**）；⑭ **SKILL 零新增工具**；⑮ 递归扫描只见 `<dir>/SKILL.md`（不扫裸 md）；⑯ UI 按 SKILL 路径排序，用系统自带编辑器打开；⑰ 删除跨平台；⑱ 密钥允许明文或 `$VAR`；⑲ 其他插件的技能/工具默认不纳入本插件管理；⑳ on-demand→eager 升档**立即对所有存活会话生效**（各会话在自己的 `agent.ctx` 注册、一次前缀失效、UI 弹窗提示、无需二次确认）；㉑ MCP 单工具启停采用持久化 `disabledTools` 黑名单，新发现工具默认启用，禁用工具对模型完全隐藏且在原生/桥调用边界强制拒绝；㉒ MCP 运行实例按会话隔离，配置仍全局共享
 
 ---
 
@@ -54,11 +54,11 @@ plugin: skill-mcp-manager
 │   ├── SkillManagerService    递归扫描 provider（只见 SKILL.md）/ 启停(frontmatter) / 删除(跨平台) / 系统编辑器打开
 │   ├── McpRegistryService     registry.json / 试连 / 快照（仅加载时刷新）
 │   ├── McpSystemConfigSync    系统配置 reconcile（仅所在 profile；add 成功即写兜底）
-│   ├── McpRuntimeService      客户端生命周期（自动管理：会话结束/dispose 断开，重连兜底，无空闲超时）
+│   ├── McpRuntimeService      按会话的客户端生命周期（会话结束/dispose 断开，重连兜底，无空闲超时）
 │   ├── McpBridge              mcp_call 桥：结构化参数通道 / JSON 容错 / 校验诊断
 │   ├── ContextInjector        pre-step enter 注入引擎
 │   ├── 工具                   mcp_register / mcp_load(peek) / mcp_call（三件套）
-│   └── Client RPC              UI 能力：删除条目 / 手动断开 / 试加载刷新 / prepare-uninstall
+│   └── Client RPC              UI 能力：删除条目 / 刷新快照 / prepare-uninstall
 └── Client
     ├── 抽屉：SKILL 管理（按路径排序；系统编辑器打开）
     ├── 抽屉：工具（MCP）管理
@@ -176,27 +176,27 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 | 档位                        | 会话启动                   | 注入内容                           | 调用方式                                  | token / 缓存                        |
 | --------------------------- | -------------------------- | ---------------------------------- | ----------------------------------------- | ----------------------------------- |
-| **eager（常驻）**     | 连接 + 原生注册全部工具    | 名字+描述+工具名+工具描述+参数概要 | 原生`mcp__<name>__<tool>`               | schema 每请求计入；前缀自首请求稳定 |
+| **eager（常驻）**     | 该会话连接 + 在 `agent.ctx` 原生注册全部工具 | 名字+描述+工具名+工具描述+参数概要 | 原生`mcp__<name>__<tool>`               | schema 每请求计入；前缀自首请求稳定 |
 | **on-demand（按需）** | 不连接，只读 registry 快照 | 名字+描述+工具名（+notes）         | **`mcp_call` 桥**（加载后仍走桥） | 恒定小 schema；**前缀零失效** |
 | **disabled（关闭）**  | 不加载、不注入             | 无                                 | —                                        | 无                                  |
 
-- 档位为全局持久状态；`mcp_load` 的加载为会话级运行态。
-- 快照刷新时机：add 成功、修改成功、`mcp_load`（load 或 peek 时）。**启动/会话开始零连接，只读 JSON**。
-- 断开：**自动管理**——连接保持到会话结束/插件 dispose；断线由自动重连兜底；**无空闲超时**（原生 dsh-mcp-client 无 idle 机制，保持一致）。UI 提供手动"断开"（内部能力，不改 tier、不删配置）。
+- 档位为全局持久状态；运行实例按会话隔离。`mcp_load` 只加载/热重载当前会话的实例。
+- 快照刷新时机：add 成功、修改成功、会话内 `mcp_load`、管理页「刷新快照」。启动预热与「刷新快照」都是一次性试连后关闭，不留下可被多会话复用的实例。
+- 断开：**自动管理**——每个会话的连接保持到该会话结束/插件 dispose；断线由自动重连兜底；**无空闲超时**。管理页不再提供「已连接」或「断开」。
 - **单工具黑名单**：每个条目用 `disabledTools: string[]` 持久保存禁用的原始工具名；服务器后续新增工具默认启用。管理页仍展示全部快照工具，工具名前提供“启用/禁用”二档下拉框。
 - 禁用工具对模型完全隐藏：不进入 eager 原生注册、`mcp-catalog` 或 `mcp_load`/peek 返回；`mcp_call` 与 eager 工具 `execute` 入口均再次检查黑名单，防止模型根据历史名称或旧 schema 绕过。禁用不强制中断已经开始执行的调用，只拒绝之后的新调用。
 - `mcp_register` 不暴露 `disabledTools` 参数，AI 不能通过模型工具修改黑名单；黑名单仅由管理 UI 修改。
 
 ### 5.5 运行时加载器
 
-- 复用 `@modelcontextprotocol/sdk`；stdio / streamable-http；eager 条目原生注册 `mcp__<name>__<tool>`；重连策略抄 dsh-mcp-client（退避 + 预算 + 世代替换）。
-- **作用域说明（与内建一致，已定）**：`ctx.tools.register` 是 **host 级全局**注册——eager 注册后该 profile 下所有会话的请求头都携带这些工具 schema（每次请求计入 token）。这正是系统自带 dsh-mcp-client 的现状（cordis.patch.yml 静态实例全部全局注册、无 per-session 隔离），本插件 eager 档**保持一致**，不视为缺陷。on-demand 走 `mcp_call` 桥不注册 → 天然无此成本；per-session/per-agent 作用域列为远期探索，v1 不做。
+- 复用 `@modelcontextprotocol/sdk`；stdio / streamable-http；eager 条目在各会话的 `agent.ctx` 上原生注册 `mcp__<name>__<tool>`；会话销毁时随 Agent scope 清理。
+- **作用域（已定）**：同一 MCP 配置在每个 DSH 会话（含子代理）各自创建、持有和销毁独立实例。stdio 各起子进程，HTTP 各建连接。配置（注册表、档位、黑名单、密钥、备注）全局共享。同一会话内保留现有并发语义。
 
 ### 5.6 AB 通道与调用（已定）
 
 - **eager → 原生通道**：schema 进请求头、按 schema 生成参数、框架校验；前缀自首请求稳定。掉线/需重连时 AI 可 `mcp_load` 手动恢复（一次前缀失效，可接受）。
 - **on-demand → `mcp_call` 桥**：load 后不注册原生 schema；前缀零失效。目录刻意只给"MCP 描述 + 工具名"（省 token，不含工具描述/参数 schema）——模型构造 args 前先 `mcp_load` 拿参数定义，再 `mcp_call`；未 load 直接 call 会报"请先 `mcp_load`"。
-- on-demand → eager 升级**立即生效**（host 级全局注册 → 对所有会话生效；运行中切换一次前缀失效，UI 弹窗提示、无需二次确认）。
+- on-demand → eager 升级**立即对所有存活会话生效**（各会话在自己的 `agent.ctx` 注册；运行中切换一次前缀失效，UI 弹窗提示、无需二次确认）。
 - KV 影响总表（仅"模型可见工具 schema 集合运行中变化"会破坏一次前缀）：
 
 | 会破坏（一次前缀失效）                         | 不会破坏（前缀稳定）                  |
@@ -271,7 +271,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 - `settings.section` 两个抽屉页（root scope，replaceRisk=none）：
   - **SKILL 管理**：列表（名字 / 描述 / 路径，**按路径排序**）；行内启停 Switch；点击条目 → 系统编辑器打开（§4.2）；删除按钮（整个 SKILL 文件夹，跨平台回收站/trash，二次确认）；"添加外接目录"（`ctx.directoryPicker`）。
-  - **工具（MCP）管理**：注册表列表（档位徽标、调用通道 Native/Bridge、连接状态、工具数、notes、reconcile 状态）→ 详情（工具表格、描述、schema 查看、备注编辑、密钥打码/显示；每个工具名前有“启用/禁用”二档下拉框，启用为正常文字、禁用后下拉框/名称/描述变灰）→ "试加载刷新"/"查看描述"(=load peek)、"断开"(内部)、"热重载"(=load)、档位切换（立即生效；升级时弹窗提示"一次前缀失效"、无需二次确认）、**删除条目（仅 UI；= registry + patch 整条 entry 一起删，非翻 disabled、非只删一行）**、"/mcp prepare-uninstall"（= 卸载整个插件时交还原生）。
+  - **工具（MCP）管理**：注册表列表（档位徽标、调用通道 Native/Bridge、工具数、notes、reconcile 状态）→ 详情（工具表格、描述、schema 查看、备注编辑、密钥打码/显示；每个工具名前有“启用/禁用”二档下拉框，启用为正常文字、禁用后下拉框/名称/描述变灰）→ "查看描述"(=peek 只读快照)、"刷新快照"（一次性试连并更新 registry，不留下实例）、档位切换（立即对存活会话生效；升级时弹窗提示"一次前缀失效"、无需二次确认）、**删除条目（仅 UI；= registry + patch 整条 entry 一起删，非翻 disabled、非只删一行）**、"/mcp prepare-uninstall"（= 卸载整个插件时交还原生）。
 - 入口：`sidebar.footer.action` + `/skills`、`/mcp` 命令；状态同步经 RPC 推送。
 
 ---
@@ -432,3 +432,4 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 - 运行时组合：`C:\Users\Zinger\.dsh\profiles\{web,desktop}\cordis.patch.yml`。
 - Slots 树（client Inspect）：`settings.section`、`sidebar.footer.action`。
 - 用户参考实现（桥接 args 文件 workaround 的教训来源）：[alone-tree/Capability-Library](https://github.com/alone-tree/Capability-Library)。
+

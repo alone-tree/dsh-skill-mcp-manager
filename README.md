@@ -95,7 +95,7 @@ Restart the profile. The plugin lives in the Host composition, so its tools beco
 Open **Settings → Capability**:
 
 - **SKILL tab** — every managed skill (bundle `SKILL.md`), sorted by path: model-visibility switch, open in system editor, cross-platform delete. Skills shipped with the deployment (under `node_modules` / `app.asar`) are read-only: view + open only.
-- **MCP tab** — every registered server with tier badges, tool counts and connection state: switch tier, inspect details (command / env / headers / tools), enable or disable individual tools (blacklist; newly discovered tools default to enabled), mask or reveal secrets, load / peek / disconnect, delete entries. Disabled tools are hidden from the AI and rejected again at the execution boundary. A setting row adjusts the catalog's **tool-description truncation** (default 150 chars).
+- **MCP tab** — every registered server with tier badges and tool counts: switch tier, inspect details (command / env / headers / tools), enable or disable individual tools (blacklist; newly discovered tools default to enabled), mask or reveal secrets, peek descriptions, refresh the shared tool snapshot, delete entries. Snapshot refresh trial-connects and updates the registry, then closes; it does not leave a live instance. Disabled tools are hidden from the AI and rejected again at the execution boundary. A setting row adjusts the catalog's **tool-description truncation** (default 150 chars).
 
 ### Model-facing tools
 

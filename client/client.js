@@ -266,17 +266,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       try {
         const data = await postJson("/skill-mcp-manager/mcp/load", { name: entry.name, peek: peek === true });
         setOutput(data.text || "");
-        setNotice(peek ? "已查看描述" : "已加载/刷新");
-        await refresh(reveal);
-      } catch (err) {
-        setError(errText(err));
-      }
-    }
-
-    async function disconnect(entry) {
-      try {
-        await postJson("/skill-mcp-manager/mcp/disconnect", { name: entry.name });
-        setNotice("已断开 " + entry.name);
+        setNotice(peek ? "已查看描述" : "已刷新快照");
         await refresh(reveal);
       } catch (err) {
         setError(errText(err));
@@ -317,7 +307,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       if (!entry.tools || entry.tools.length === 0) {
         return h("div", { className: "smx-detail__section" },
           h("div", { className: "smx-detail__label" }, "工具"),
-          h(Empty, null, "无工具快照（请先加载）"),
+          h(Empty, null, "无工具快照（请刷新快照）"),
         );
       }
       return h("div", { className: "smx-detail__section" },
@@ -365,14 +355,13 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         entry.cwd ? kv("工作目录", entry.cwd) : null,
         entry.instructions ? kv("使用说明", entry.instructions) : null,
         entry.notes ? kv("备注", entry.notes) : null,
-        entry.lastLoadAt ? kv("上次加载", entry.lastLoadAt) : null,
+        entry.lastLoadAt ? kv("上次刷新快照", entry.lastLoadAt) : null,
         envRows(entry),
         headerRows(entry),
         toolsSection(entry),
         h("div", { className: "smx-detail__actions" },
           h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, true) }, "查看描述"),
-          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, false) }, "加载 / 刷新"),
-          h("button", { type: "button", className: "smx-btn smx-btn--ghost", onClick: () => disconnect(entry) }, "断开"),
+          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, false) }, "刷新快照"),
         ),
         output ? h("pre", { className: "smx-output" }, output) : null,
       );
@@ -385,7 +374,6 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           h("div", { className: "smx-row__top" },
             h("span", { className: "smx-row__name" }, entry.name),
             h(Badge, { tone: TIER_TONE[entry.tier] || "muted" }, TIER_LABEL[entry.tier] || entry.tier),
-            entry.connected ? h(Badge, { tone: "info" }, "已连接") : null,
             entry.transport ? h("span", { className: "smx-row__meta" }, entry.transport) : null,
             h("span", { className: "smx-row__meta" }, entry.toolCount + " 工具"),
           ),

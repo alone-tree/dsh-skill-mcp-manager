@@ -91,6 +91,20 @@ function activeNativeNames() {
     .sort();
 }
 
+function makeAgent() {
+  return {
+    ctx: {
+      tools: ctx.tools,
+      effect(fn) {
+        const disposer = fn();
+        if (typeof disposer === "function") effects.push(disposer);
+        return () => {};
+      },
+    },
+    session: { surface: { nodes: [] }, events: [] },
+  };
+}
+
 function makeReq(body) {
   const chunks = [Buffer.from(JSON.stringify(body), "utf8")];
   let index = 0;
@@ -131,6 +145,12 @@ try {
     toolCallTimeoutMs: 5000,
   });
 
+  const agent = makeAgent();
+  await preStep(
+    { agent, signal: { throwIfAborted() {} } },
+    async () => ({ kind: "enter", messages: [] }),
+  );
+
   const initialNative = activeNativeNames();
   if (initialNative.join(",") !== "mcp__demo__allowed") {
     failed.push(`initial eager tools should only contain allowed, got ${initialNative.join(",")}`);
@@ -151,12 +171,12 @@ try {
   if (mcpCall) {
     let blockedError = "";
     try {
-      await mcpCall.execute({ name: "demo", tool: "blocked", args: {} }, { signal: new AbortController().signal });
+      await mcpCall.execute({ name: "demo", tool: "blocked", args: {} }, { signal: new AbortController().signal, agent });
     } catch (error) {
       blockedError = String(error?.message ?? error);
     }
     if (!/disabled/.test(blockedError)) failed.push(`mcp_call did not reject disabled tool: ${blockedError}`);
-    const allowed = await mcpCall.execute({ name: "demo", tool: "allowed", args: {} }, { signal: new AbortController().signal });
+    const allowed = await mcpCall.execute({ name: "demo", tool: "allowed", args: {} }, { signal: new AbortController().signal, agent });
     if (allowed.text !== "called allowed") failed.push(`enabled bridge call failed: ${allowed.text}`);
   }
 
@@ -185,7 +205,7 @@ try {
   }
 
   const result = await preStep(
-    { agent: { session: { surface: { nodes: [] }, events: [] } }, signal: { throwIfAborted() {} } },
+    { agent, signal: { throwIfAborted() {} } },
     async () => ({ kind: "enter", messages: [] }),
   );
   const catalog = JSON.stringify(result.messages);

@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [未发布]
+
+### Added
+
+- MCP 按会话隔离运行实例：同一配置在每个 DSH 会话（含子代理）各自启动 stdio 子进程或 HTTP 连接；eager 工具注册到该会话的 `agent.ctx`。管理页删除「已连接」「断开」，原「加载」改为「刷新快照」（试连后只更新 `registry.json`）。测试：`test/session-isolate-smoke.mjs`。
+
 ## [1.0.1] — 2026-08-28
 
 ### Added

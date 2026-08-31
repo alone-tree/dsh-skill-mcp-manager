@@ -42,6 +42,8 @@ jobs:
           node test/ui-smoke.mjs
           node test/frontmatter-smoke.mjs
           node test/catalog-smoke.mjs
+          node test/tool-disable-smoke.mjs
+          node test/session-isolate-smoke.mjs
 
       - name: Publish
         run: npm publish --provenance --access public

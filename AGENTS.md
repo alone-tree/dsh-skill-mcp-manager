@@ -19,7 +19,7 @@ client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS 
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
-docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
+docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图；讨论中专题见 docs/专题/（已归档：按会话隔离MCP实例-2026-08-31-已归档）
 ```
 
 ## 文档维护
@@ -50,12 +50,13 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 2. 读 settings.json（覆盖 `toolDescriptionMaxLength`）
 3. `importNative()` —— 解析 patch 原生段，把 registry 没有的 `dsh-mcp-client` 条目入库（默认 on-demand；原生 disabled 则 disabled）
 4. `reconcile()` —— 写托管块：registry-only 条目写 `disabled:true` 影子 insert + 每个启用原生行追加 `- id: X\n  disabled: true` 覆盖行（接管）
-5. eager 条目 `ensureEager`（连接 + 注册 `mcp__<server>__<tool>`）
-6. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目并发连接、抓工具快照 + 服务器元信息
+5. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目一次性试连、抓工具快照 + 服务器元信息后关闭，不留下运行实例
+6. eager 实例改到各会话首次 `agent/pre-step` 时在该会话 `agent.ctx` 上启动
 
 ## 关键设计决策（改动前务必遵守）
 
 - **on-demand 桥 = 前缀零失效**：on-demand 条目不注册原生 schema，模型只看到 `mcp_load/mcp_call/mcp_register`。eager 才原生注册。
+- **MCP 运行实例按会话隔离**：同一配置在每个 DSH 会话（含子代理）各自创建/销毁 stdio 子进程或 HTTP 连接。eager 工具注册到该会话的 `agent.ctx`，不写入 Host 全局工具表。配置（注册表、档位、黑名单、密钥、备注）仍全局共享。
 - **名称语义**：`entry.name`（本地名）= 模型命名空间，必须 `[A-Za-z0-9_-]{1,32}`（拼进 `mcp__<name>__<tool>`）；`entry.serverName`（服务器自报名）= 只读元信息，来自 `serverInfo.name`，可与本地名不同。
 - **本地 `description` 已删除**：描述完全来自服务器自报 `serverDescription`；`mcp_register` 无 `description` 参数。`notes` 是用户维护，永不被覆盖。
 - **元信息字段**：`serverName / serverVersion / serverTitle / serverDescription / websiteUrl / instructions / capabilities / metaFetchedAt`，由 `applyServerMetadata(entry, connection)` 在连接时填充，只读。
@@ -94,6 +95,7 @@ node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
+node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
 
 # 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
 cd ~/.dsh/profiles/desktop
