@@ -2,6 +2,13 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [1.1.1] — 2026-08-31
+
+### Fixed
+
+- MCP 接管改为**全量合并架构**：吸收阶段扫描整个补丁文件并按行 id（systemEntryId）认领，未认领行吸收进注册表；托管块由注册表整体重生成（每条目恰好一行、disabled，重复 loader id 拒绝写盘），托管块外被认领的原生行从原位置移除（空 insert 块一并清理，非 MCP 内容原样保留）。修复"重命名 MCP 后重启出现同 id 双 insert、DSH 无法启动"的故障类——改名、手写新行、serverName 漂移均安全。测试：`test/import-smoke.mjs`（新增改名安全与重复 id 自检用例）。
+- `prepare-uninstall` 把托管块整体交还：所有条目以完整、启用的 insert 写回，disabled 档保留 disabled，不再遗漏。
+
 ## [1.1.0] — 2026-08-31
 
 ### Added

@@ -19,6 +19,7 @@
 | M3 | Client 管理页：Skill 启停/打开/删除，MCP 档位/详情/密钥/刷新快照/删除，以及同源 HTTP RPC |
 | 单工具禁用 | `disabledTools` 黑名单；新工具默认启用；管理页逐工具“启用/禁用”下拉框；目录/load 隐藏 + eager/bridge 双调用边界拒绝 |
 | 会话隔离 | 每个 DSH 会话（含子代理）独立 MCP 实例；eager 注册到 `agent.ctx`；管理页无已连接/断开 |
+| 全量合并接管 | 吸收（全文扫描、按行 id 认领）→ 托管块整体重生成（每条目一行 disabled，重复 id 拒绝写盘）→ 托管块外被认领行移除；本机真机验证：6 条原生行全部收编，端到端可用 |
 
 - 现有 Host 侧模块：`lib/index.js`（MCP 三件套 + 注入 + reconcile + 单工具黑名单 + UI handlers）、`lib/skill.js`（递归 provider + watcher）、`lib/ui.js`（同源 HTTP 路由和文件操作）。
 - 现有 Client：`client/client.js`，在 `settings.section` 注册“能力库”，包含技能/MCP 两个标签页。

@@ -42,16 +42,15 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— MCP 注册表（权威）。
 - `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`）。
-- `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：托管块（`MANAGED_MARKER` 与 `MANAGED_END_MARKER` 之间）= 影子条目 + 原生条目 `disabled:true` 接管行。
+- `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：全部 MCP 行收敛进托管块（`MANAGED_MARKER` 与 `MANAGED_END_MARKER` 之间），由注册表整体重生成，每条目一行 `disabled: true`。
 
 ### 每次启动顺序（lib/index.js 的 apply → startup）
 
 1. `loadRegistry(dataDir)`
 2. 读 settings.json（覆盖 `toolDescriptionMaxLength`）
-3. `importNative()` —— 解析 patch 原生段，把 registry 没有的 `dsh-mcp-client` 条目入库（默认 on-demand；原生 disabled 则 disabled）
-4. `reconcile()` —— 写托管块：registry-only 条目写 `disabled:true` 影子 insert + 每个启用原生行追加 `- id: X\n  disabled: true` 覆盖行（接管）
-5. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目一次性试连、抓工具快照 + 服务器元信息后关闭，不留下运行实例
-6. eager 实例改到各会话首次 `agent/pre-step` 时在该会话 `agent.ctx` 上启动
+3. `reconcile()` —— 吸收 + 托管块整体重生成：扫描**整个补丁文件**的 dsh-mcp-client 行，未认领的按行 id 吸收进注册表；托管块由注册表整体重生成（每条目恰好一行、disabled、重复 id 拒绝写盘），托管块外被认领的原生行从原位置移除
+4. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目一次性试连、抓工具快照 + 服务器元信息后关闭，不留下运行实例
+5. eager 实例改到各会话首次 `agent/pre-step` 时在该会话 `agent.ctx` 上启动
 
 ## 关键设计决策（改动前务必遵守）
 
@@ -60,10 +59,10 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **名称语义**：`entry.name`（本地名）= 模型命名空间，必须 `[A-Za-z0-9_-]{1,32}`（拼进 `mcp__<name>__<tool>`）；`entry.serverName`（服务器自报名）= 只读元信息，来自 `serverInfo.name`，可与本地名不同。
 - **本地 `description` 已删除**：描述完全来自服务器自报 `serverDescription`；`mcp_register` 无 `description` 参数。`notes` 是用户维护，永不被覆盖。
 - **元信息字段**：`serverName / serverVersion / serverTitle / serverDescription / websiteUrl / instructions / capabilities / metaFetchedAt`，由 `applyServerMetadata(entry, connection)` 在连接时填充，只读。
-- **导入接管 = 两阶段靠档位规避**：默认 on-demand 不注册原生工具，所以「导入 + 写 disabled」能在同一次 boot 完成、无重名冲突；若某条目被用户切成 eager，才回到「关原生防重名」语义（依赖接管行已写好）。
+- **接管 = 全量合并 + id 主键**：`cordis.patch.yml` 的 MCP 配置全部收敛进托管块，每次启动由注册表整体重生成（一个 MCP 一行、disabled；重复 loader id 拒绝写盘）。吸收按**行 id（systemEntryId）**对账，名字（serverName）不参与——改名、手写新行、serverName 漂移都不会产生重复条目或重复 id。吸收的行保留原始 config（`rawConfig`），`mcp_register` 修改后按字段模型重生成。
 - **管理页 Skill 列表要带 preset scope**：内建 `dsh-skill-filesystem` 挂在 agent preset 层。`ctx.skills.list()` 不传 `scope` 只看全局层（本插件递归 provider）；AI 目录注入传 `scope: agent` 所以能看到 `~/.dsh/skills`。Host UI 用 `ctx.get("agentPresets")?.standingKeyFor()` 作为 scope。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
-- **只替换起止标记之间**：`reconcile` / `prepare-uninstall` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 中间的本插件 MCP 行（影子 insert + 接管行）；标记前、结束标记后 byte-for-byte 保留。夹在中间的非 MCP 原样挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
+- **托管块外零残留**：`reconcile` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 之间的内容；托管块外被注册表认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理），未认领行原样保留，非 MCP 内容 byte-for-byte 保留。夹在中间的非 MCP 行挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
 - **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 启用工具的名称/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。
 - **MCP 单工具禁用 = 黑名单 + 双调用边界**：`entry.disabledTools` 保存原始工具名，新工具默认启用；禁用工具从 eager 注册、目录和 `mcp_load` 隐藏，但安全保证来自 eager `execute` 与 `mcp_call` 在 `tools/call` 前再次拒绝。`mcp_register` 不提供黑名单修改参数，只有管理 UI 可改。已开始的调用不强制中断。
 

@@ -240,14 +240,16 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 5.10 系统配置 reconcile（防"删插件丢配置"，仅所在 profile）
 
-1. **add 成功即写兜底**：**所有档位（含 on-demand）**都写完整 dsh-mcp-client 实例 + **条目顶层 `disabled: true`**（`disabled` 是 loader 行级字段，与 `id`/`name`/`config` 同级，**不是** dsh-mcp-client 的 config 字段）+ `# managed by skill-mcp-manager` 注释（插件在时由加载器驱动、静态实例禁用防双注册）。
-2. **每次启动 reconcile（双向对齐）**：patch 有 registry 无 → 导入；registry managed 有 patch 缺失/被 AI 改 → 回写补齐；参数漂移 → 以 registry 为准回写 + diff 高亮。AI 改过原生配置也不会丢。回写范围只替换 `cordis.patch.yml` 里本插件起止标记之间的 MCP 托管行（影子 insert + 接管行）；标记前与结束标记后 byte-for-byte 保留，夹在中间的非 MCP 挪到结束标记之后。
-3. **按条目全量回写（replace 整 config）**：编辑/档位 → 把**该条目完整 config** 回写进 patch（patch 只支持整 config 替换、不做字段级合并）；删除 → 整条移除该条目（见下条）；写前备份 `.bak-<timestamp>`。
-4. **卸载保障**（两个不同操作，勿混）：
-   - **删除单个 MCP 条目**（UI"删除条目"）：把该条目**从 `registry.json` 和 `cordis.patch.yml` 一起删除**——删的是**整条 insert 条目**（`id` + `name` + `config` + `disabled` 整个 MCP 配置块），不是只删 `disabled: true` 这一行，更不是翻 `disabled`。
-   - **卸载整个插件**：`/mcp prepare-uninstall` 把仍存在的 managed 条目（**含 on-demand**）`disabled: true → false`，将 `cordis.patch.yml` 的管理权交还给系统原生 dsh-mcp-client；若用户没跑 prepare-uninstall 就直接卸载插件，条目以 `disabled: true` 残留（配置完整），手动改回即可。SKILL 无需卸载处理（递归 provider 随插件消失，技能退回内建单层发现）。交还后的条目（含原 on-demand）由原生按 **eager** 加载——原生无 on-demand 概念，此为预期行为。
+> 1.1.1 起为**全量合并架构**：注册表是唯一事实源，托管块是它的编译产物，一个 MCP 在补丁里只有一行。
+
+1. **吸收（adopt，全文扫描）**：启动时扫描**整个补丁文件**（托管块上方、内部、下方）的 `@deepseek-ai/dsh-mcp-client` insert 行，按**行 id（systemEntryId）**对账——没有任何条目认领的行被吸收为新条目（原生 `disabled: true` 则入 disabled 档）。名字（serverName）只作新条目的初始名，不参与对账，改名场景安全。`importNativeMcp: false` 时跳过吸收。
+2. **托管块整体重生成**：注册表每一条目在托管块里恰好一行（`disabled: true`，配置由能力库驱动时该行不加载）；配置取吸收时的**原始 config（`rawConfig`）**并把 serverName 对齐到当前条目名，注册表原生条目则按字段模型合成。生成器对**重复 loader id 拒绝写盘**——同 id 双 insert 的"无法启动"故障从结构上不可能写出。
+3. **托管块外零残留**：托管块外被认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理）；未认领行（`importNativeMcp: false` 等）保持原样。非 MCP 内容 byte-for-byte 保留，夹在托管标记之间的非 MCP 行挪到结束标记之后。写前备份 `.bak-<timestamp>`。
+4. **回写时机**：每次启动 + 每次注册表变更（`mcp_register`、档位、单工具启停、删除）都会整体重生成托管块；`rawConfig` 在用户经 `mcp_register` 修改条目后丢弃，改按字段模型重生成（超出模型的字段以 `mcp_register` 契约为准）。
+5. **卸载保障**（两个不同操作，勿混）：
+   - **删除单个 MCP 条目**（UI"删除条目"）：整条从 `registry.json` 移除，托管块重生成后该行消失（补丁随注册表走）。
+   - **卸载整个插件**：`/mcp prepare-uninstall` 把托管块整体替换为 HANDOVER 块——所有条目以**完整、启用**的 insert 写回（disabled 档保留 disabled），交还系统原生 dsh-mcp-client；原生无 on-demand 概念，交还后按 **eager** 加载，此为预期行为。若没跑 prepare-uninstall 就直接卸载插件，托管行以 `disabled: true` 残留（配置完整），手动去除即可恢复。SKILL 无需卸载处理（递归 provider 随插件消失）。
    - 插件临时禁用（stop）不触发任何恢复。
-5. 冲突保护：注册时拒绝与未 disabled 静态实例重名。
 
 ### 5.11 热重载总览
 
