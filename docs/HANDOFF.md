@@ -16,28 +16,18 @@
 | M0 | `registry.json` + `mcp_register`/`mcp_load(peek)`/`mcp_call` 三件套 + pre-step `mcp-catalog` 注入 + 三档 eager/on-demand/disabled + AB 通道（eager 原生注册、on-demand 走桥） |
 | M1 | 递归 skill provider（任意深度只认 `<dir>/SKILL.md`，含根入口）+ frontmatter 解析 + **watcher 热生效**（改 skill 不用重启） |
 | M2 | 回写 reconcile（往 `cordis.patch.yml` 写 `disabled: true` 影子条目）+ `/prepare-uninstall` 命令（交还原生 dsh-mcp-client） |
+| M3 | Client 管理页：Skill 启停/打开/删除，MCP 档位/详情/密钥/加载/断开/删除，以及同源 HTTP RPC |
+| 单工具禁用 | `disabledTools` 黑名单；新工具默认启用；管理页逐工具“启用/禁用”下拉框；目录/load 隐藏 + eager/bridge 双调用边界拒绝 |
 
-- 现有 Host 侧模块：`lib/index.js`（MCP 三件套 + 注入 + reconcile + prepare-uninstall 命令）、`lib/skill.js`（递归 provider + watcher）。
+- 现有 Host 侧模块：`lib/index.js`（MCP 三件套 + 注入 + reconcile + 单工具黑名单 + UI handlers）、`lib/skill.js`（递归 provider + watcher）、`lib/ui.js`（同源 HTTP 路由和文件操作）。
+- 现有 Client：`client/client.js`，在 `settings.section` 注册“能力库”，包含技能/MCP 两个标签页。
 - `inject = ["tools", "skills"]`；`ctx.get("commands")` 可选注册 `/prepare-uninstall`。
 
-## 待做（Client UI，唯一剩余）
+## 当前状态
 
-1. **SKILL 管理抽屉**：frontmatter 启停 Switch（写 `disable-model-invocation`）、跨平台删除（回收站）、系统编辑器打开（`start`/`open`/`xdg-open`）。
-2. **MCP 管理抽屉**：档位切换（eager/on-demand/disabled）、删除条目、详情、密钥打码。
-3. **入口**：`sidebar.footer.action` + `/skills`、`/mcp` 命令。
-
-对应设计文档：§4.2/§4.3/§4.4（skill 管理）、§7（UI Slots）、§5.10-4（删除条目 = registry+patch 整条删）。
-
-## 开 UI 前必须先查（用 cordis_inspect）
-
-- `Slots.listSubTree` → `settings.section`、`sidebar.footer.action` 的确切注册契约和 props。
-- Host↔Client RPC：查 `ctx.remote` / `harness.handle` / `host.call` 的确切 API（Client→Host，仅 lossless JSON）。
-- Client 组件：React `createElement`，禁止 JSX/TS（插件源码是纯 JS，无打包转换）。
-
-## 后端服务现状（Client 要接的）
-
-- Host 已有：递归 provider（`ctx.skills.registerProvider`）、reconcile、三件套工具。但 **frontmatter 启停/删除/系统编辑器打开还没有实现**（设计里是 UI 触发，不是模型工具）。
-- 需要新增：Host 侧 RPC 方法（启停/删除/打开/档位切换/删除条目），Client 抽屉调这些 RPC。
+- 已实现设计文档中的 Host、Client 管理功能；后续按 `IDEAS.md` 中未定想法继续迭代。
+- MCP 单工具禁用的安全边界：禁用工具不注册/不注入/不由 `mcp_load` 返回；即使模型记住旧名称，eager `execute` 与 `mcp_call` 仍会在发出 MCP 调用前拒绝。
+- 禁用不取消已经开始执行的调用。`mcp_register` 不开放黑名单修改参数，只有管理 UI 能修改。
 
 ## 开发 / 测试 / 安装
 
@@ -46,12 +36,10 @@
 cd D:\Github\dsh-skill-mcp-manager
 pnpm install --config.auto-install-peers=true
 
-# 跑测试（5 个，全绿基线）
-node test/smoke.mjs            # 三件套 + 命令注册
-node test/schema-check.mjs     # 工具 schema 校验
-node test/skill-smoke.mjs      # 递归 provider
-node test/watcher-smoke.mjs    # watcher 热生效
-node test/count-skills.mjs     # 应扫出 119 个技能
+# 跑自动化测试（全绿基线）
+node test/*.mjs
+# 单工具禁用专项
+node test/tool-disable-smoke.mjs
 
 # 重装进 desktop（改完代码后，pnpm 对 file: 依赖要 remove+add 才刷新）
 cd C:\Users\Zinger\.dsh\profiles\desktop

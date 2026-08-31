@@ -63,7 +63,8 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **管理页 Skill 列表要带 preset scope**：内建 `dsh-skill-filesystem` 挂在 agent preset 层。`ctx.skills.list()` 不传 `scope` 只看全局层（本插件递归 provider）；AI 目录注入传 `scope: agent` 所以能看到 `~/.dsh/skills`。Host UI 用 `ctx.get("agentPresets")?.standingKeyFor()` 作为 scope。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
 - **只替换起止标记之间**：`reconcile` / `prepare-uninstall` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 中间的本插件 MCP 行（影子 insert + 接管行）；标记前、结束标记后 byte-for-byte 保留。夹在中间的非 MCP 原样挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
-- **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 工具名/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。
+- **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 启用工具的名称/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。
+- **MCP 单工具禁用 = 黑名单 + 双调用边界**：`entry.disabledTools` 保存原始工具名，新工具默认启用；禁用工具从 eager 注册、目录和 `mcp_load` 隐藏，但安全保证来自 eager `execute` 与 `mcp_call` 在 `tools/call` 前再次拒绝。`mcp_register` 不提供黑名单修改参数，只有管理 UI 可改。已开始的调用不强制中断。
 
 ## 编码约定
 
@@ -92,6 +93,7 @@ node test/import-smoke.mjs     # 原生导入 + 接管（隔离 DSH_HOME，勿�
 node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
+node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
 
 # 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
 cd ~/.dsh/profiles/desktop

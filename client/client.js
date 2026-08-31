@@ -247,6 +247,20 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       }
     }
 
+    async function setToolEnabled(entry, tool, enabled) {
+      try {
+        await postJson("/skill-mcp-manager/mcp/tool-tier", {
+          name: entry.name,
+          tool: tool.name,
+          enabled,
+        });
+        setNotice("已" + (enabled ? "启用 " : "禁用 ") + entry.name + "/" + tool.name);
+        await refresh(reveal);
+      } catch (err) {
+        setError(errText(err));
+      }
+    }
+
     async function run(entry, peek) {
       setOutput("");
       try {
@@ -309,7 +323,19 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       return h("div", { className: "smx-detail__section" },
         h("div", { className: "smx-detail__label" }, "工具 (" + entry.tools.length + ")"),
         h("ul", { className: "smx-tools" },
-          entry.tools.map((tool) => h("li", { key: tool.name, className: "smx-tool" },
+          entry.tools.map((tool) => h("li", {
+            key: tool.name,
+            className: cx("smx-tool", tool.enabled === false && "is-disabled"),
+          },
+            h("select", {
+              className: cx("smx-tool__tier", tool.enabled === false && "is-disabled"),
+              value: tool.enabled === false ? "disabled" : "enabled",
+              "aria-label": tool.name + " 档位",
+              onChange: (event) => setToolEnabled(entry, tool, event.target.value === "enabled"),
+            },
+              h("option", { value: "enabled" }, "启用"),
+              h("option", { value: "disabled" }, "禁用"),
+            ),
             h("span", { className: "smx-tool__name" }, tool.name),
             tool.description ? h("span", { className: "smx-tool__desc" }, tool.description) : null,
           )),
@@ -472,9 +498,12 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     ".smx-kv__v { color:var(--dsw-alias-label-primary); word-break:break-all; }",
     ".smx-select { font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); }",
     ".smx-tools { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }",
-    ".smx-tool { display:flex; gap:8px; font-size:12px; }",
-    ".smx-tool__name { font-family:ui-monospace,monospace; color:var(--dsw-alias-brand-primary); flex-shrink:0; }",
+    ".smx-tool { display:flex; align-items:flex-start; gap:8px; font-size:12px; }",
+    ".smx-tool__tier { flex-shrink:0; min-width:58px; font-size:11px; padding:2px 4px; border-radius:5px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); }",
+    ".smx-tool__tier.is-disabled { color:var(--dsw-alias-label-secondary); }",
+    ".smx-tool__name { font-family:ui-monospace,monospace; color:var(--dsw-alias-label-primary); flex-shrink:0; }",
     ".smx-tool__desc { color:var(--dsw-alias-label-secondary); }",
+    ".smx-tool.is-disabled .smx-tool__name, .smx-tool.is-disabled .smx-tool__desc { color:var(--dsw-alias-label-secondary); }",
     ".smx-output { margin:0; padding:8px; border-radius:6px; background:var(--dsw-alias-bg-layer-2); color:var(--dsw-alias-label-primary); font-size:11px; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; }",
     ".smx-header { display:flex; flex-direction:column; gap:2px; }",
     ".smx-subtitle { font-size:12px; color:var(--dsw-alias-label-secondary); }",

@@ -147,7 +147,7 @@ for (const name of ["mcp_register", "mcp_load", "mcp_call"]) {
 for (const name of ["prepare-uninstall", "skills", "mcp"]) {
   if (!commands.some((c) => c.name === name)) failed.push(`missing command ${name}`);
 }
-for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/toggle", "/skill-mcp-manager/skills/delete", "/skill-mcp-manager/mcp"]) {
+for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/toggle", "/skill-mcp-manager/skills/delete", "/skill-mcp-manager/mcp", "/skill-mcp-manager/mcp/tool-tier"]) {
   if (!routes.some((r) => r.path === path)) failed.push(`missing route ${path}`);
 }
 

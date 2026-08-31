@@ -16,7 +16,7 @@ SKILL management
 
 ### 1. One-stop visual management
 
-Which Skills **and** MCPs are installed? Are they enabled? What does each one do? All visible directly in the settings page — **no digging through layers**. Enable/disable and delete MCPs and Skills from the UI, and click a SKILL to view its source (opens with your local default markdown reader).
+Which Skills **and** MCPs are installed? Are they enabled? What does each one do? All visible directly in the settings page — **no digging through layers**. Enable/disable and delete MCPs and Skills from the UI, and click a SKILL to view its source (opens with your local default markdown reader). Each MCP tool can also be enabled or disabled independently; a disabled tool cannot be called by the AI and does not affect other tools on the same server.
 
 ### 2. MCP on-demand loading (the core feature, carefully polished)
 
@@ -95,7 +95,7 @@ Restart the profile. The plugin lives in the Host composition, so its tools beco
 Open **Settings → Capability**:
 
 - **SKILL tab** — every managed skill (bundle `SKILL.md`), sorted by path: model-visibility switch, open in system editor, cross-platform delete. Skills shipped with the deployment (under `node_modules` / `app.asar`) are read-only: view + open only.
-- **MCP tab** — every registered server with tier badges, tool counts and connection state: switch tier, inspect details (command / env / headers / tools), mask or reveal secrets, load / peek / disconnect, delete entries. A setting row adjusts the catalog's **tool-description truncation** (default 150 chars).
+- **MCP tab** — every registered server with tier badges, tool counts and connection state: switch tier, inspect details (command / env / headers / tools), enable or disable individual tools (blacklist; newly discovered tools default to enabled), mask or reveal secrets, load / peek / disconnect, delete entries. Disabled tools are hidden from the AI and rejected again at the execution boundary. A setting row adjusts the catalog's **tool-description truncation** (default 150 chars).
 
 ### Model-facing tools
 
@@ -133,7 +133,6 @@ The plugin provides three small, fixed tools to manage all on-demand MCPs.
 ## Future directions
 
 - **MCP Resources & prompts support** — currently only MCP tool calls are supported; other parts of the MCP protocol will be added later.
-- Disable a single tool inside an MCP without affecting the others.
 - Edit each MCP's note (notes) in the UI.
 - View and edit SKILLs in the UI.
 
