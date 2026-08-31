@@ -26,11 +26,15 @@ At session start, an on-demand server exposes only its **name + short tool descr
 - **No startup latency** — the server connects only when the AI actually needs it.
 - **No failed-load dead end** — loading is on demand, and a failure is non-fatal (retry / reload later).
 
-### 3. In-session MCP hot reload
+### 3. Per-session MCP instances
 
-Updated your own local MCP server? Just `mcp_load` it in the session — reconnect, re-list tools, fresh snapshot. **No new session, no DSH restart — extremely friendly to MCP development.**
+Every DSH session (including subagents) creates, holds, and disposes its **own instance** of each MCP config: stdio servers get one subprocess per session, HTTP servers one connection per session. When multiple sessions drive stateful tools like Playwright concurrently, each operates its own browser pages — **no clobbering across sessions** — and instances are automatically disposed when their session ends. Eager tools are registered by each session in its own context; MCP configuration (registry, tiers, per-tool disables, secrets, notes) remains globally shared.
 
-### 4. SKILL deep scan, external libraries, temporary hide
+### 4. In-session MCP hot reload
+
+Updated your own local MCP server? Just `mcp_load` it in the session — reconnect, re-list tools, fresh snapshot. **No new session, no DSH restart — extremely friendly to MCP development.** The reconnect only affects the current session's instance; other sessions are untouched.
+
+### 5. SKILL deep scan, external libraries, temporary hide
 
 - Recursively discovers `<dir>/SKILL.md` at **any depth** — connect any number of external skill-library directories, at any depth, so you can group SKILLs flexibly. The plugin only scans `<dir>/SKILL.md`, so other files in a folder (e.g. `readme.md`, `reference.md`, backup files) are never picked up as skills.
 - Hiding a skill = invisible to the model (writes `disable-model-invocation`), while your `/name` slash command **still works**.
@@ -40,25 +44,25 @@ Updated your own local MCP server? Just `mcp_load` it in the session — reconne
 
 To make the plugin easy and reassuring to use, it also includes:
 
-### 5. Native MCP config takeover — nothing lost on uninstall
+### 6. Native MCP config takeover — nothing lost on uninstall
 
 On install it automatically takes over your existing MCP config: every `@deepseek-ai/dsh-mcp-client` row in the profile is imported into the registry and taken over (on-demand by default; already-disabled stays disabled).
 
 Uninstall is safe: whenever an MCP is added, the plugin also syncs the MCP config into the original config file but keeps it **disabled**. `/mcp prepare-uninstall` flips those disabled MCPs back to enabled and hands every managed entry (with full config) back to the native client. **Removing the plugin never loses your MCP config.**
 
-### 6. Your note on every MCP
+### 7. Your note on every MCP
 
 Attach a user note to any MCP; it is shown to the AI in the session catalog and is **never overwritten** by server/developer updates. For example: *"If server A goes down, use server B as a backup."*
 
-### 7. Auto warm-up
+### 8. Auto warm-up
 
-After install the plugin connects once to fetch real tool names and descriptions, so the catalog is immediately useful. The cache is refreshed automatically every time an MCP is loaded.
+After install the plugin connects once to fetch real tool names and descriptions, so the catalog is immediately useful. The cache is refreshed automatically every time an MCP is loaded. Warm-up and snapshot refresh are one-shot trial connections — they close when done and never leave a live instance.
 
-### 8. Validated registration
+### 9. Validated registration
 
 `mcp_register` **trial-connects + lists tools before persisting** — only correctly configured servers are admitted.
 
-### 9. Profile-scoped only
+### 10. Profile-scoped only
 
 The plugin only manages the profile it is installed into — no overreach, no misplacement.
 
@@ -84,7 +88,7 @@ Then add one row to that profile's `cordis.patch.yml` (see [`cordis.patch.exampl
         importNativeMcp: true           # take over native dsh-mcp-client rows on boot
 ```
 
-Restart the profile. The plugin lives in the Host composition, so its tools become available to every session in that profile.
+Restart the profile. The plugin lives in the Host composition, so the `mcp_register` / `mcp_load` / `mcp_call` trio is visible to every session in that profile; eager tools are registered by each session in its own context, and MCP runtime instances are per-session.
 
 > **Takeover note:** with `importNativeMcp: true` (default), native `dsh-mcp-client` rows are imported into the capability library and disabled at the native layer — the capability library becomes the single entry point (three tiers, `mcp-catalog`, the UI). Run `/mcp prepare-uninstall` before uninstalling to hand the entries back.
 
@@ -108,8 +112,8 @@ The plugin provides three small, fixed tools to manage all on-demand MCPs.
   ```
 
   `tier` ∈ `eager` | `on-demand` | `disabled` (default `on-demand`). `notes` is user-maintained and is not overwritten by developer MCP updates.
-- **`mcp_load { name, peek? }`** — load / hot-reload a server, returns full tool definitions + server-declared metadata. `peek: true` only reads the snapshot — no connect, no disconnect — handy when the AI forgot a tool's parameters and wants a quick peek without interrupting the MCP's live process. Especially friendly for stateful MCPs like browser automation.
-- **`mcp_call { name, tool, args? }`** — invoke an on-demand tool (must `mcp_load` first). Structured `args` only — never shell text, never a temp file.
+- **`mcp_load { name, peek? }`** — load / hot-reload a server instance **for the current session**, returning full tool definitions + server-declared metadata; other sessions are unaffected. `peek: true` only reads the snapshot — no connect, no disconnect — handy when the AI forgot a tool's parameters and wants a quick peek without interrupting the MCP's live process. Especially friendly for stateful MCPs like browser automation.
+- **`mcp_call { name, tool, args? }`** — invoke an on-demand tool (must `mcp_load` first) through **the current session's** loaded instance. Structured `args` only — never shell text, never a temp file.
 
 ## Config
 
