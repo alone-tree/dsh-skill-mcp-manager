@@ -103,8 +103,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     async function toggle(skill) {
       try {
         await postJson("/skill-mcp-manager/skills/toggle", { name: skill.name, enabled: !skill.modelInvocable });
-        await refresh();
-        setNotice("已更新 \u300c" + skill.name + "\u300d");
+        setSkills((current) => current && current.map((item) =>
+          item.name === skill.name ? { ...item, modelInvocable: !skill.modelInvocable } : item,
+        ));
       } catch (err) {
         setError(errText(err));
       }
@@ -160,7 +161,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
 
     return h("div", { className: "smx" },
       h("div", { className: "smx-head" },
-        h("span", { className: "smx-count" }, skills ? String(skills.length) + " 个技能" : ""),
+        h("span", { className: "smx-count" }, skills
+          ? String(skills.length) + " 个技能 · 模型可见 " + skills.filter((s) => s.modelInvocable).length + " 个"
+          : ""),
         h("button", { type: "button", className: "smx-btn", onClick: refresh }, "刷新"),
       ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,

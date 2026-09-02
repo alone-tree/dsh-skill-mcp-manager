@@ -2,6 +2,16 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [1.1.2] — 2026-09-02
+
+### Added
+
+- 技能管理页头部计数显示模型可见数量：「N 个技能 · 模型可见 M 个」。M 由前端按每条 Skill 的 `modelInvocable` 过滤得出，随启停操作刷新，关闭部分技能后不再只显示总数。
+
+### Fixed
+
+- Skill 模型可见性开关成功后仅局部更新对应行，不再全量刷新列表或显示成功提示，滚动位置保持不变。
+
 ## [1.1.1] — 2026-08-31
 
 ### Fixed

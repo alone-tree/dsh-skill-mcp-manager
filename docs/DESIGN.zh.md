@@ -272,7 +272,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 ## 7. UI 设计（Slots）
 
 - `settings.section` 两个抽屉页（root scope，replaceRisk=none）：
-  - **SKILL 管理**：列表（名字 / 描述 / 路径，**按路径排序**）；行内启停 Switch；点击条目 → 系统编辑器打开（§4.2）；删除按钮（整个 SKILL 文件夹，跨平台回收站/trash，二次确认）；"添加外接目录"（`ctx.directoryPicker`）。
+  - **SKILL 管理**：列表（名字 / 描述 / 路径，**按路径排序**）；头部计数「N 个技能 · 模型可见 M 个」（M 按行内 `modelInvocable` 过滤，前端计算，随启停刷新）；行内启停 Switch 成功后只在当前列表更新对应行，不全量刷新、不显示成功提示，保持滚动位置；点击条目 → 系统编辑器打开（§4.2）；删除按钮（整个 SKILL 文件夹，跨平台回收站/trash，二次确认）；"添加外接目录"（`ctx.directoryPicker`）。
   - **工具（MCP）管理**：注册表列表（档位徽标、调用通道 Native/Bridge、工具数、notes、reconcile 状态）→ 详情（工具表格、描述、schema 查看、备注编辑、密钥打码/显示；每个工具名前有“启用/禁用”二档下拉框，启用为正常文字、禁用后下拉框/名称/描述变灰）→ "查看描述"(=peek 只读快照)、"刷新快照"（一次性试连并更新 registry，不留下实例）、档位切换（立即对存活会话生效；升级时弹窗提示"一次前缀失效"、无需二次确认）、**删除条目（仅 UI；= registry + patch 整条 entry 一起删，非翻 disabled、非只删一行）**、"/mcp prepare-uninstall"（= 卸载整个插件时交还原生）。
 - 入口：`sidebar.footer.action` + `/skills`、`/mcp` 命令；状态同步经 RPC 推送。
 
