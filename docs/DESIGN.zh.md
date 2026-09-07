@@ -216,6 +216,8 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 4. **schema 校验 + 纠错诊断**：调用前用注册表 `inputSchema`（zod/ajv）校验；失败返回 `{ ok:false, errors:[{path, expected, got, message}] }`。
 5. **无 args 文件转存（AI 透明）**：args 直接以 JSON 传给 `client.callTool`（MCP = JSON-RPC over stdin，无 shell/argv 长度限制）；AI 永远只传结构化 `args`，**不写临时文件、不传 `args_file`**。
 6. **错误规范化**：`{ ok, data | error }`；isError → 结构化错误；超时/断连 → 明确状态（自动重连兜底）。
+7. **参数形状守卫（1.1.3 落地）**：`mcp_call` 入口运行时校验 `tool` 为非空字符串、`args` 为对象（可省略表示无参），报错附正确形状 `{"name","tool","args"}`。**不做自动解包**——只报错不纠正。**真机实测（2026-09-07）**：当前 DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，嵌套内容到不了 handler，真实环境下主要由"缺 `tool`"分支拦截；"工具名嵌进 args"错位形状识别保留为防御性分支（mock 测试直接调 handler 可达）。issue #1 的根因即旧宿主+旧插件组合下这类入参原样透传为 `params.name=undefined`，服务端报成晦涩的 `-32602`。结论：`required` 兜底不能依赖宿主，插件入口必须自带。
+8. **错误附调用上下文（1.1.3 落地）**：两类失败路径的错误消息追加 `called MCP tool: <server>/<tool>` + 实际发送的 `arguments` JSON（各截断 2000 字符），桥与 eager `execute` 两条路径共用一处实现：① 协议层 `tools/call` 失败（-32602/-32603/超时等，另附该工具 `inputSchema`）；② 服务端 `isError` 业务错误结果（不附 inputSchema——模型刚 `mcp_load` 过，上下文里已有 schema，错误里只补"实际发送了什么"这个增量）。真机实测：Tavily 对未知工具返回的是 `isError` 结果而非 JSON-RPC 错误，②是更常见的失败路径。代价：单次失败响应最多附加约 4 KB。
 
 | 维度             | 原生通道（eager）            | `mcp_call` 桥（on-demand）    |
 | ---------------- | ---------------------------- | ------------------------------- |
@@ -230,7 +232,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 - **`mcp_load {name, peek?}`**（服务所有非 disabled 条目；**本身就是工具，调用即 return 该 MCP 的完整配置说明**——工具名/描述/参数，作为工具结果自然进对话，无需额外注入机制）：
   - `peek=false`（默认，加载/热重载）：未连接 → 连接 + listTools + 更新快照 + return 完整定义；已连接 → 热重载（断开→重连→listTools→世代替换→快照更新→return 新定义）。**再次调用即 reload，无需重启 DSH**。eager 条目 → 重连 + 原生注册（一次前缀失效，已接受）。热重载只是 load 对"已连接条目"的另一种行为，不是独立机制。
   - `peek=true`（只查看）：只读活跃连接或最新快照的工具描述，不注册、不建立持久连接、不重启生命周期（浏览器等状态敏感 MCP 不掉线）；快照缺失时一次性连接刷新后断开。**参数名定为 `peek`**。
-- **`mcp_call {name, tool, args?}`**：on-demand 桥（§5.7）。**目标条目未加载（未 `mcp_load`）时，直接返回"该 MCP 未加载，请先 `mcp_load`"，不自动加载。**
+- **`mcp_call {name, tool, args?}`**：on-demand 桥（§5.7）。**目标条目未加载（未 `mcp_load`）时，直接返回"该 MCP 未加载，请先 `mcp_load`"，不自动加载。** 入口带参数形状守卫与错误上下文附加（§5.7 第 7/8 条）。
 - **无删除/断开工具**：删除（uninstall）仅 UI（§7）；断开自动管理（§5.4）。
 
 ### 5.9 启动注入（ContextInjector）

@@ -65,6 +65,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **托管块外零残留**：`reconcile` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 之间的内容；托管块外被注册表认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理），未认领行原样保留，非 MCP 内容 byte-for-byte 保留。夹在中间的非 MCP 行挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
 - **目录注入 digest 驱动**：`catalogDigest` 含 serverDescription + 启用工具的名称/描述；变了才重新注入（追加替换，不改历史）。是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。
 - **MCP 单工具禁用 = 黑名单 + 双调用边界**：`entry.disabledTools` 保存原始工具名，新工具默认启用；禁用工具从 eager 注册、目录和 `mcp_load` 隐藏，但安全保证来自 eager `execute` 与 `mcp_call` 在 `tools/call` 前再次拒绝。`mcp_register` 不提供黑名单修改参数，只有管理 UI 可改。已开始的调用不强制中断。
+- **mcp_call 参数形状守卫 + 错误上下文**：`mcp_call` 入口运行时校验 `tool`（非空字符串）与 `args`（对象或省略），报错附正确形状，**只报错不自动解包**；工具调用失败（协议错误与 `isError` 结果两类）的错误消息统一附加 server/tool 与实参 JSON（协议错误另附 inputSchema，各截断 2000 字符），桥与 eager `execute` 共用此实现。**真机实测（2026-09-07）**：DSH 宿主会对 `required` 违例调用先清洗参数，真实环境下守卫主要走"缺 tool"分支，嵌套形状识别是防御性冗余（mock 直调 handler 可达）；不要假设宿主会替插件做参数校验。
 
 ## 编码约定
 
@@ -95,6 +96,7 @@ node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
 node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
+node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 
 # 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
 cd ~/.dsh/profiles/desktop

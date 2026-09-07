@@ -31,6 +31,8 @@
 - 真机验证（2026-08-31）：思源桥双会话各自独立进程、并发读取不同文档互不干扰，子代理实例随会话自动回收；父会话浏览器页面不被子代理覆盖。已知边界：playwright 默认持久 profile 全机单例，第二会话并行用浏览器需在该条目加 `--isolated`（MCP 配置项，未改）。
 - MCP 单工具禁用的安全边界：禁用工具不注册/不注入/不由 `mcp_load` 返回；即使模型记住旧名称，eager `execute` 与 `mcp_call` 仍会在发出 MCP 调用前拒绝。
 - 禁用不取消已经开始执行的调用。`mcp_register` 不开放黑名单修改参数，只有管理 UI 能修改。
+- **1.1.3（2026-09-07，未发版）**：`mcp_call` 参数形状守卫 + 工具调用错误附上下文（桥 + eager 双路径，含协议错误与 `isError` 结果两类）。**真机验证全部通过（2026-09-07，desktop profile）**：① eager 原生直调正常（tavily 实测，工具面即时可用、无需重启会话、无需先 `mcp_load`）；② eager `isError` 上下文（`tavily_extract` 缺 `urls` 实测，报错带 `called MCP tool` + `arguments sent`）；③ **协议层错误上下文**（本地临时 stdio server 的 handler 直接 throw → SDK 返回 -32603 实测，报错三段齐全：原始错误 + called MCP tool + arguments sent + tool inputSchema；验证后条目已禁用、临时脚本已删）；④ 桥接失败上下文（未知工具名实测，按设计不附 inputSchema）；⑤ `mcp_call` 缺 `tool` 守卫分支。双路径 × 两类错误形态全部真机覆盖，无遗留。
+- **真机实测发现（重要）**：DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，嵌套内容到不了 handler。含义：① 插件不能假设宿主会替自己做参数校验；② 守卫的嵌套形状识别分支在真实宿主下是防御性冗余（mock 直调 handler 可达）；③ issue #1 的根因（`{tool,args}` 原样透传成 `params.name=undefined`）是旧宿主+旧插件组合下的现象。
 
 ## 开发 / 测试 / 安装
 
@@ -39,10 +41,19 @@
 cd D:\Github\dsh-skill-mcp-manager
 pnpm install --config.auto-install-peers=true
 
-# 跑自动化测试（全绿基线）
-node test/*.mjs
-# 单工具禁用专项
+# 跑自动化测试（发布基线 = AGENTS.md 的显式清单；不要用 node test/*.mjs，
+# 其中 e2e-playwright.mjs 需要真实运行时、不属于基线）
+node test/smoke.mjs
+node test/schema-check.mjs
+node test/skill-smoke.mjs
+node test/watcher-smoke.mjs
+node test/import-smoke.mjs
+node test/ui-smoke.mjs
+node test/frontmatter-smoke.mjs
+node test/catalog-smoke.mjs
 node test/tool-disable-smoke.mjs
+node test/session-isolate-smoke.mjs
+node test/mcp-call-guard-smoke.mjs
 
 # 重装进 desktop（改完代码后，pnpm 对 file: 依赖要 remove+add 才刷新）
 cd C:\Users\Zinger\.dsh\profiles\desktop
