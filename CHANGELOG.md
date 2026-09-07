@@ -2,6 +2,16 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [1.1.4] — 2026-09-07
+
+### Fixed
+
+- **mcp-catalog 每轮重注（真机 bug）**：可见性判定读取了宿主 Session 上不存在的 `events` 属性（公开 API 是 `eventAt`/`seq`/`snapshotEvents`），导致 `visibleCatalogDigest` 恒为空、每轮对话都重新注入目录。现对齐内建 skill-catalog 模式：`session.eventAt` 倒序遍历持久日志、对 surface 上仍可见的最新 `mcp-catalog` 读 digest 字段对比（digest 缺失/损坏的记录视为「非本插件目录」）。测试 mock 同步改为真机 Session 形状——此前 mock 模拟了不存在的 `session.events` 数组，测试绿而真机每轮失效。
+
+### Changed
+
+- **注入零双重标准**：mcp-catalog 不再声明宿主的结构化 `form: "catalog"`（该表单只渲染 name+description 两列瘦摘要，且多数服务器无自报描述，人类展开只看到一列名字）——缺省/未知 form 由宿主 OpaqueBody 渲染模型正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文。source 收缩为 `{kind, digest}`：OpaqueBody 的 SourceFields 会显示 source 全部字段，此前携带的 entries JSON 会把同一信息渲染两遍（人类比模型多看一遍冗余）。注入正文与 digest 由同一份 entries 投影派生。升级后首轮会重新注入一次，之后恢复按需注入。
+
 ## [1.1.3] — 2026-09-07
 
 ### Added

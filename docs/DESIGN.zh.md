@@ -238,8 +238,8 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 5.9 启动注入（ContextInjector）
 
-- `agent/pre-step` enter 模式，source kind `mcp-catalog`：eager 全量（名字+描述+工具名+工具描述+参数概要）；on-demand 概要（名字+描述+工具名+notes）。数据源 = registry 快照（只读不连接）；digest 驱动追加替换。是否已注入以会话 surface 上可见的 `mcp-catalog` 为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加；不要用进程内 WeakMap 记住 digest。
-- 参数概要预算：properties 键名 + 必填标记 + 单项描述截断（默认每工具 ≤ 300 字，settings.json 可调）。
+- `agent/pre-step` enter 模式，source kind `mcp-catalog`：**不声明宿主的结构化 form**——缺省/未知 form 由宿主按 OpaqueBody 渲染注入正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文（零双重标准，2026-09-07 已定）；source 仅含 `{kind, digest}`（SourceFields 显示 source 全部字段，携带 entries 会把同一信息渲染两遍）。注入内容：所有非 disabled 档位的「名字 + (tier) + 描述 + notes（仅 on-demand）+ 启用工具名 + 工具描述」（描述/工具描述按 `catalogDescriptionMaxLength`/`toolDescriptionMaxLength` 截断）。数据源 = registry 快照（只读不连接）。
+- **正文与 digest 同源**：两者由同一份 entries 投影（name/tier/description/notes/tools）派生，digest 写入 source 作为持久化投影。可见性判定用 `session.eventAt` 倒序遍历会话日志，对 surface 上仍可见的最新 `mcp-catalog` 读 digest 字段对比——宿主 Session 没有 `events` 属性（公开 API 为 `eventAt`/`seq`/`snapshotEvents`），不读 `session.events`；digest 缺失/损坏的记录视为「非本插件目录」。digest 变化才追加替换；是否已注入以会话 surface 上可见的 `mcp-catalog` 为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加。
 
 ### 5.10 系统配置 reconcile（防"删插件丢配置"，仅所在 profile）
 

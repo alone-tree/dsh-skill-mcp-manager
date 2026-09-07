@@ -35,6 +35,7 @@
 - **真机实测发现（重要）**：DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，嵌套内容到不了 handler。含义：① 插件不能假设宿主会替自己做参数校验；② 守卫的嵌套形状识别分支在真实宿主下是防御性冗余（mock 直调 handler 可达）；③ issue #1 的根因（`{tool,args}` 原样透传成 `params.name=undefined`）是旧宿主+旧插件组合下的现象。
 
 - **1.1.3 补充（2026-09-07 同日落地）**：`mcp_load` 与工具快照补回 `inputSchema`——修复 M0 起 `snapshotTools` 把工具裁剪成 `{name, description}`，导致 load/peek/registry 永不含参数结构、与工具 description"parameter schemas"自相矛盾的问题（`renderDefinitions` 的 schema 渲染分支一直是死分支）。真机已验证：重启后 peek 返回逐工具完整 schema。测试 `test/mcp-load-schema-smoke.mjs` 入发布基线。
+- **1.1.4（2026-09-07）**：① 修复 mcp-catalog **每轮重注**——可见性判定读了宿主 Session 上不存在的 `events` 属性（公开 API 是 `eventAt`/`seq`/`snapshotEvents`），现用 `eventAt` 倒序遍历 + 读持久化 digest 字段对比；② **注入零双重标准**——mcp-catalog 不声明结构化 form（宿主 OpaqueBody 渲染模型正文原文，人类展开卡片 = 模型所见），source 收缩为 `{kind, digest}`（SourceFields 显示 source 全部字段，携带 entries 会重复渲染）。测试 `test/catalog-smoke.mjs` 重写为真机 Session 形状。关键宿主 API 事实：Session 无 `events` 数组；OpaqueBody = 正文原文 + SourceFields。
 
 ## 开发 / 测试 / 安装
 
