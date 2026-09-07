@@ -9,6 +9,10 @@ All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are docume
 - **`mcp_call` 参数形状守卫**：`tool` 缺失/非字符串、`args` 非对象（含数组/null）在桥接入口直接拒绝，报错附正确调用形状 `{"name","tool","args"}`，不做自动解包。真机实测：当前 DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，所以真实环境下主要由"缺 `tool`"分支拦截；"工具名嵌进 args"的错位形状识别保留为防御性分支（mock 测试直接调 handler 可达）。背景：issue #1（-32602 Invalid request parameters）的根因是调用参数形状错误而非桥接信封 bug——旧宿主+旧插件组合下 `{tool, args}` 被原样塞进 `arguments`，`params.name` 序列化丢失。
 - **工具调用错误附上下文**：两类失败路径的错误消息统一追加 `called MCP tool: <server>/<tool>` 与实际发送的 `arguments` JSON（各截断 2000 字符）：① 协议层失败（-32602/-32603/超时等，另附该工具 `inputSchema`）；② 服务端 `isError` 业务错误结果（如"未知工具"——真机实测 Tavily 对未知工具走的就是这条路径，不附 inputSchema，模型刚 `mcp_load` 过已有 schema）。on-demand 桥与 eager 原生 `execute` 两条路径均生效，模型可对照"实际发送了什么"自我修正。代价：单次失败响应最多附加约 4 KB。测试：`test/mcp-call-guard-smoke.mjs`（新增，发布基线同步更新）。
 
+### Fixed
+
+- **`mcp_load` 返回与工具快照补回 `inputSchema`**：`snapshotTools` 与 eager `ensureEager` 此前把工具快照裁剪成 `{name, description}`，导致 `mcp_load`（load/peek 两条路径）与 `registry.json` 持久化快照自 M0 起永远不含参数结构——工具 description 声称 "parameter schemas"、设计文档写明 "return 完整定义"，但渲染层拿不到数据，模型只能靠调用报错反推参数（多动作型工具受影响最重）。现在快照保留服务器自报 `inputSchema`，`mcp_load` 逐工具渲染参数结构，`registry.json` 同步持久化；`mcp-catalog` 目录注入保持只含名称+描述不变。测试：`test/mcp-load-schema-smoke.mjs`（新增，发布基线同步更新）。
+
 ## [1.1.2] — 2026-09-02
 
 ### Added

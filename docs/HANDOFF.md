@@ -34,6 +34,8 @@
 - **1.1.3（2026-09-07，未发版）**：`mcp_call` 参数形状守卫 + 工具调用错误附上下文（桥 + eager 双路径，含协议错误与 `isError` 结果两类）。**真机验证全部通过（2026-09-07，desktop profile）**：① eager 原生直调正常（tavily 实测，工具面即时可用、无需重启会话、无需先 `mcp_load`）；② eager `isError` 上下文（`tavily_extract` 缺 `urls` 实测，报错带 `called MCP tool` + `arguments sent`）；③ **协议层错误上下文**（本地临时 stdio server 的 handler 直接 throw → SDK 返回 -32603 实测，报错三段齐全：原始错误 + called MCP tool + arguments sent + tool inputSchema；验证后条目已禁用、临时脚本已删）；④ 桥接失败上下文（未知工具名实测，按设计不附 inputSchema）；⑤ `mcp_call` 缺 `tool` 守卫分支。双路径 × 两类错误形态全部真机覆盖，无遗留。
 - **真机实测发现（重要）**：DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，嵌套内容到不了 handler。含义：① 插件不能假设宿主会替自己做参数校验；② 守卫的嵌套形状识别分支在真实宿主下是防御性冗余（mock 直调 handler 可达）；③ issue #1 的根因（`{tool,args}` 原样透传成 `params.name=undefined`）是旧宿主+旧插件组合下的现象。
 
+- **1.1.3 补充（2026-09-07 同日落地）**：`mcp_load` 与工具快照补回 `inputSchema`——修复 M0 起 `snapshotTools` 把工具裁剪成 `{name, description}`，导致 load/peek/registry 永不含参数结构、与工具 description"parameter schemas"自相矛盾的问题（`renderDefinitions` 的 schema 渲染分支一直是死分支）。真机已验证：重启后 peek 返回逐工具完整 schema。测试 `test/mcp-load-schema-smoke.mjs` 入发布基线。
+
 ## 开发 / 测试 / 安装
 
 ```bash
@@ -54,6 +56,7 @@ node test/catalog-smoke.mjs
 node test/tool-disable-smoke.mjs
 node test/session-isolate-smoke.mjs
 node test/mcp-call-guard-smoke.mjs
+node test/mcp-load-schema-smoke.mjs
 
 # 重装进 desktop（改完代码后，pnpm 对 file: 依赖要 remove+add 才刷新）
 cd C:\Users\Zinger\.dsh\profiles\desktop

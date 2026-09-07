@@ -45,6 +45,7 @@ jobs:
           node test/tool-disable-smoke.mjs
           node test/session-isolate-smoke.mjs
           node test/mcp-call-guard-smoke.mjs
+          node test/mcp-load-schema-smoke.mjs
 
       - name: Publish
         run: npm publish --provenance --access public

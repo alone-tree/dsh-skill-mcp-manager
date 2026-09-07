@@ -97,6 +97,7 @@ node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
 node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
+node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 
 # 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
 cd ~/.dsh/profiles/desktop
