@@ -33,7 +33,7 @@ const ctx = {
 };
 
 await apply(ctx, {
-  dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data/e2e",
+  dataDir: ".test-data/e2e",
   profile: "web",
   trialTimeoutMs: 120000,
   toolCallTimeoutMs: 120000,

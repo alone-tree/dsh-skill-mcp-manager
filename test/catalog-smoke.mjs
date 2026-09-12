@@ -11,6 +11,10 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { apply } from "../lib/index.js";
 
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
+
 const tmp = join(homedir(), ".dsh-catalog-smoke-" + process.pid);
 const dataDir = join(tmp, "data");
 await rm(tmp, { recursive: true, force: true });

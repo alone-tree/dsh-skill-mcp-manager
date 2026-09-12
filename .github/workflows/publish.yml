@@ -46,6 +46,10 @@ jobs:
           node test/session-isolate-smoke.mjs
           node test/mcp-call-guard-smoke.mjs
           node test/mcp-load-schema-smoke.mjs
+          node test/env-scrub-smoke.mjs
+          node test/stdio-confirm-smoke.mjs
+          node test/mcp-command-smoke.mjs
+          node test/eager-churn-smoke.mjs
 
       - name: Publish
         run: npm publish --provenance --access public

@@ -126,13 +126,22 @@ The plugin provides three small, fixed tools to manage all on-demand MCPs.
 | `catalogDescriptionMaxLength` | `500`                      | Truncation for the server description in the catalog.                                                          |
 | `toolDescriptionMaxLength`    | `150`                      | Truncation for each tool's description in the catalog (tool names always shown in full). Adjustable in the UI. |
 | `importNativeMcp`             | `true`                     | On boot, import native `dsh-mcp-client` rows into the capability library and take them over.                 |
+| `confirmStdioRegister`        | `true`                     | When the host has an approval seam, ask the user before a model-driven `mcp_register` spawns a new or connection-changed stdio command. Set `false` to restore fully silent registration. |
+| `trustedOrigins`              | `[]`                       | Extra `host` / `host:port` values accepted for the browser routes when the GUI is reached through a LAN hostname (by default only `localhost` and IP-literal Host headers are accepted). |
 
 ## Data
 
 - `~/.dsh/skill-mcp-manager/registry.json` — authoritative MCP registry (version 1, `entries[]`).
 - `~/.dsh/skill-mcp-manager/settings.json` — plugin settings (`customRecursiveDirs`, `toolDescriptionMaxLength`, …).
 - `~/.dsh/skill-mcp-manager/trash.log` — delete audit.
-- Env values may be literals or `$VAR` references to the process environment.
+- Env values may be literals or `$VAR` references; references are expanded from the host environment at spawn time, so secrets can stay out of `registry.json`.
+
+## Security
+
+- **Scrubbed child env** — spawned stdio servers inherit the host environment minus credential-shaped names (`*KEY*`, `*PASSWORD*`, `*SECRET*`, `*TOKEN*`) and all `DSH_*` names, exactly like the native `dsh-mcp-client`. Explicit entry env always wins over the scrub.
+- **Confirmation for model-driven stdio spawns** — `mcp_register` is model-facing; when the host provides an approval seam, adding or changing a stdio connection contract asks the user first (the entry would spawn now and at every future boot). Hosts without the seam keep the previous silent behavior; `confirmStdioRegister: false` disables the gate.
+- **DNS-rebinding protection on the UI routes** — browser-originated requests must be same-origin **and** carry a `localhost` / IP-literal `Host` header (a rebinder's domain Host fails the pin). Non-browser clients are unaffected. LAN-hostname access can be allowed explicitly via `trustedOrigins`.
+- **Bounded patch backups** — each reconcile keeps at most 5 `cordis.patch.yml.bak-*` copies instead of accumulating them forever.
 
 ## Future directions
 

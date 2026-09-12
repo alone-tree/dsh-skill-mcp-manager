@@ -32,6 +32,10 @@ await writeFile(serverPath, `
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
 const server = new Server({ name: "load-schema-test", version: "1.0.0" }, { capabilities: { tools: {} } });
 const tools = [
   { name: "widget", description: "Multi-action widget", inputSchema: ${JSON.stringify(widgetSchema)} },
