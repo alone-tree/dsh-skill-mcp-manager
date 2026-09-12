@@ -126,13 +126,22 @@ dsh plugin --profile <profile> add dsh-skill-mcp-manager
 | `catalogDescriptionMaxLength` | `500`                      | 目录里服务器描述的截断长度。                                       |
 | `toolDescriptionMaxLength`    | `150`                      | 目录里每条工具描述的截断长度（工具名始终完整显示）。可在 UI 调整。 |
 | `importNativeMcp`             | `true`                     | boot 时导入原生 `dsh-mcp-client` 条目到能力库并接管。            |
+| `confirmStdioRegister`        | `true`                     | 宿主提供审批通道时，模型发起的 `mcp_register` 新增/变更 stdio 连接契约（将立即并在以后每次 boot 时拉起本地进程）前先询问用户。设为 `false` 恢复完全静默注册。 |
+| `trustedOrigins`              | `[]`                       | 通过局域网主机名访问 GUI 时，额外信任的 `host` / `host:port` 值（默认只接受 `localhost` 与 IP 字面量 Host 头）。 |
 
 ## 数据
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— 权威 MCP 注册表（version 1，`entries[]`）。
 - `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength` 等）。
 - `~/.dsh/skill-mcp-manager/trash.log` —— 删除审计。
-- env 值可为明文或 `$VAR` 进程环境变量引用。
+- env 值可为明文或 `$VAR` 引用；引用在拉起进程时从宿主环境展开，密钥可以不落盘到 `registry.json`。
+
+## 安全
+
+- **子进程环境净化** —— stdio 子进程继承宿主环境时会剔除凭据形态的变量名（`*KEY*`、`*PASSWORD*`、`*SECRET*`、`*TOKEN*`）与全部 `DSH_*` 名，与原生 `dsh-mcp-client` 一致；条目显式给出的 env 总是覆盖净化后的值。
+- **模型发起 stdio 拉起需确认** —— `mcp_register` 面向模型；宿主有审批通道时，新增或变更 stdio 连接契约（现在以及以后每次 boot 都会拉起本地进程）会先询问用户。无审批通道的宿主保持原有静默行为；`confirmStdioRegister: false` 可关闭该闸门。
+- **UI 路由的 DNS-rebinding 防护** —— 浏览器发起的请求必须同源**且** Host 头为 `localhost` 或 IP 字面量（rebinding 攻击的域名 Host 无法通过）；非浏览器客户端不受影响。局域网主机名访问可通过 `trustedOrigins` 显式放行。
+- **备份有界** —— 每次 reconcile 最多保留 5 份 `cordis.patch.yml.bak-*`，不再无限累积。
 
 ## 未来方向
 

@@ -5,6 +5,10 @@
 import { assertSupportedJsonSchema } from "@deepseek-ai/dsh-tools";
 import { apply } from "../lib/index.js";
 
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
+
 const defs = [];
 const ctx = {
   tools: {
@@ -30,7 +34,7 @@ const ctx = {
   logger: { warn() {}, error() {}, info() {} },
 };
 
-await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "__test__", importNativeMcp: false });
+await apply(ctx, { dataDir: ".test-data", profile: "__test__", importNativeMcp: false });
 
 let failed = false;
 for (const d of defs) {

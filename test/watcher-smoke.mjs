@@ -5,8 +5,12 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { registerRecursiveSkillProvider } from "../lib/skill.js";
 
-const base = "D:/Github/dsh-skill-mcp-manager/.test-data/watcher";
-const dataDir = "D:/Github/dsh-skill-mcp-manager/.test-data";
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
+
+const base = ".test-data/watcher";
+const dataDir = ".test-data";
 
 await rm(base, { recursive: true, force: true });
 await mkdir(base, { recursive: true });

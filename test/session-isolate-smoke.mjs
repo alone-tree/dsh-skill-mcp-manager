@@ -16,6 +16,10 @@ await writeFile(serverPath, `
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
 const id = "pid-" + process.pid + "-" + Math.random().toString(16).slice(2);
 const server = new Server({ name: "session-isolate-test", version: "1.0.0" }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

@@ -4,6 +4,10 @@
 
 import { apply, name, inject } from "../lib/index.js";
 
+// Keep this test off the user's real ~/.dsh (reconcile reads/writes the
+// profile patch file); dshHome() resolves DSH_HOME lazily at apply() time.
+process.env.DSH_HOME = process.cwd() + "/.test-data/dsh-home";
+
 const registered = [];
 const listeners = new Map();
 const commands = [];
@@ -54,7 +58,7 @@ console.log("name:", name);
 console.log("inject:", inject.join(","));
 
 await apply(ctx, {
-  dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data",
+  dataDir: ".test-data",
   profile: "__test__",
   importNativeMcp: false,
   trialTimeoutMs: 3000,

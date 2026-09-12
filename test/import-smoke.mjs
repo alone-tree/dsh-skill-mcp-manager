@@ -39,8 +39,8 @@ const nativePatch = [
 ].join("\n") + "\n";
 await writeFile(join(profileDir, "cordis.patch.yml"), nativePatch, "utf8");
 
-// Set DSH_HOME BEFORE the module is imported so the module-level constant
-// resolves to the temp home.
+// Point DSH_HOME at the temp home before apply() (resolved lazily at call
+// time, so a static import would also work).
 process.env.DSH_HOME = tmp;
 const { apply } = await import("../lib/index.js");
 

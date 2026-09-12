@@ -9,7 +9,169 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   const { useState, useEffect, useCallback } = React;
 
   const name = "dsh-skill-mcp-manager";
-  const inject = ["slots"];
+  const inject = ["slots", "locale"];
+
+  // ── i18n ─────────────────────────────────────────────────────────────────
+  // English is the default; Chinese only when the host locale service (or,
+  // failing that, the browser language) reports a zh locale.
+  const I18N = {
+    en: {
+      sectionLabel: "Capability",
+      title: "Capability",
+      subtitle: "Manage the agent's skills and MCP servers",
+      tabSkills: "Skills",
+      loading: "Loading\u2026",
+      refresh: "Refresh",
+      cancel: "Cancel",
+      delete: "Delete",
+      skNoSkills: "No manageable skills (bundle-style SKILL.md)",
+      skCount: "{total} skills \u00b7 {visible} visible to the model",
+      skOpenedEditor: "Opened {path} in the system editor",
+      skDeleted: "Deleted {name}",
+      skReadonly: "Read-only",
+      skReadonlyHint: "Read-only (no toggle)",
+      skModelVisible: "Visible to model",
+      skModelHidden: "Hidden from model",
+      skOpen: "Open",
+      skConfirmDelete: "Delete entire folder",
+      tierEager: "Eager",
+      tierOnDemand: "On-demand",
+      tierDisabled: "Off",
+      mcpServers: "{total} servers",
+      mcpReveal: "Show secrets",
+      mcpHide: "Hide secrets",
+      mcpNoEntries: "No MCP servers registered",
+      mcpToolDescLabel: "Tool description truncation (chars)",
+      mcpSave: "Save",
+      mcpCurrent: "Current {value}",
+      mcpToolDescInvalid: "Tool description truncation must be an integer between 1 and 5000",
+      mcpToolDescUpdated: "Tool description truncation updated to {value}",
+      mcpUpgraded: "Upgraded to eager (registered live; prefix invalidation happens once)",
+      mcpSwitched: "Switched \u201c{name}\u201d to {tier}",
+      mcpToolEnabled: "Enabled {name}/{tool}",
+      mcpToolDisabled: "Disabled {name}/{tool}",
+      mcpPeeked: "Description viewed",
+      mcpPeekAction: "View description",
+      mcpRefreshed: "Snapshot refreshed",
+      mcpRefreshAction: "Refresh snapshot",
+      mcpDeleted: "Deleted {name}",
+      mcpEnvLabel: "Environment variables",
+      mcpToolsLabel: "Tools",
+      mcpNoTools: "No tool snapshot (refresh the snapshot)",
+      mcpToolsCount: "Tools ({count})",
+      mcpToolTierAria: "{name} tier",
+      mcpOptEnabled: "Enabled",
+      mcpOptDisabled: "Disabled",
+      mcpTierLabel: "Tier",
+      kvTransport: "Transport",
+      kvDescription: "Description",
+      kvServerName: "Server self-reported name",
+      kvVersion: "Version",
+      kvTitle: "Title",
+      kvWebsite: "Website",
+      kvCommand: "Command",
+      kvArgs: "Args",
+      kvCwd: "Working directory",
+      kvInstructions: "Instructions",
+      kvNotes: "Notes",
+      kvLastLoad: "Last snapshot refresh",
+      mcpToolCount: "{count} tools",
+      mcpCollapse: "Collapse",
+      mcpDetails: "Details",
+      mcpConfirmDeleteEntry: "Delete entry",
+    },
+    zh: {
+      sectionLabel: "能力库",
+      title: "能力库 (Capability)",
+      subtitle: "管理 Agent 的 Skill 与 MCP",
+      tabSkills: "技能",
+      loading: "加载中\u2026",
+      refresh: "刷新",
+      cancel: "取消",
+      delete: "删除",
+      skNoSkills: "没有可管理的技能（bundle 型 SKILL.md）",
+      skCount: "{total} 个技能 \u00b7 模型可见 {visible} 个",
+      skOpenedEditor: "已用系统编辑器打开 {path}",
+      skDeleted: "已删除 {name}",
+      skReadonly: "只读",
+      skReadonlyHint: "只读（不可启停）",
+      skModelVisible: "模型可见",
+      skModelHidden: "模型隐藏",
+      skOpen: "打开",
+      skConfirmDelete: "确认删除整个文件夹",
+      tierEager: "常驻",
+      tierOnDemand: "按需",
+      tierDisabled: "关闭",
+      mcpServers: "{total} 个服务器",
+      mcpReveal: "显示密钥",
+      mcpHide: "隐藏密钥",
+      mcpNoEntries: "没有已注册的 MCP 服务器",
+      mcpToolDescLabel: "工具描述截断（字符）",
+      mcpSave: "保存",
+      mcpCurrent: "当前 {value}",
+      mcpToolDescInvalid: "工具描述截断必须是 1–5000 的正整数",
+      mcpToolDescUpdated: "已更新工具描述截断为 {value}",
+      mcpUpgraded: "已升至 eager（运行中注册，前缀失效一次）",
+      mcpSwitched: "已切换\u300c{name}\u300d到 {tier}",
+      mcpToolEnabled: "已启用 {name}/{tool}",
+      mcpToolDisabled: "已禁用 {name}/{tool}",
+      mcpPeeked: "已查看描述",
+      mcpPeekAction: "查看描述",
+      mcpRefreshed: "已刷新快照",
+      mcpRefreshAction: "刷新快照",
+      mcpDeleted: "已删除 {name}",
+      mcpEnvLabel: "环境变量",
+      mcpToolsLabel: "工具",
+      mcpNoTools: "无工具快照（请刷新快照）",
+      mcpToolsCount: "工具 ({count})",
+      mcpToolTierAria: "{name} 档位",
+      mcpOptEnabled: "启用",
+      mcpOptDisabled: "禁用",
+      mcpTierLabel: "档位",
+      kvTransport: "传输",
+      kvDescription: "描述",
+      kvServerName: "服务器自报名",
+      kvVersion: "版本",
+      kvTitle: "标题",
+      kvWebsite: "网站",
+      kvCommand: "命令",
+      kvArgs: "参数",
+      kvCwd: "工作目录",
+      kvInstructions: "使用说明",
+      kvNotes: "备注",
+      kvLastLoad: "上次刷新快照",
+      mcpToolCount: "{count} 工具",
+      mcpCollapse: "收起",
+      mcpDetails: "详情",
+      mcpConfirmDeleteEntry: "确认删除条目",
+    },
+  };
+
+  /** Host locale sync — the snapshot shape is { active, locales, revision }. */
+  function detectLang(ctx) {
+    try {
+      const snap = ctx && ctx.locale && ctx.locale.snapshot && ctx.locale.snapshot();
+      const code = String((snap && (snap.active || snap.locale || snap.language)) || "");
+      if (/^zh/i.test(code)) return "zh";
+      if (/^en/i.test(code)) return "en";
+    } catch (e) { /* runtime without locale service */ }
+    try {
+      const nav = String((typeof navigator !== "undefined" && navigator.language) || "");
+      if (/^zh/i.test(nav)) return "zh";
+    } catch (e) { /* no navigator */ }
+    return "en";
+  }
+
+  let LANG = null;
+
+  function t(key, params) {
+    let out = (I18N[LANG === "zh" ? "zh" : "en"][key]) ?? I18N.en[key] ?? key;
+    if (params) {
+      for (const k of Object.keys(params)) out = out.split("{" + k + "}").join(String(params[k]));
+    }
+    return out;
+  }
+
 
   // ── fetch ────────────────────────────────────────────────────────────────
   async function getJson(path) {
@@ -114,7 +276,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     async function open(skill) {
       try {
         await postJson("/skill-mcp-manager/skills/open", { name: skill.name });
-        setNotice("已用系统编辑器打开 " + skill.path);
+        setNotice(t("skOpenedEditor", { path: skill.path }));
       } catch (err) {
         setError(errText(err) + " \u2014 " + skill.path);
       }
@@ -124,7 +286,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       setConfirming("");
       try {
         await postJson("/skill-mcp-manager/skills/delete", { name: skill.name });
-        setNotice("已删除 " + skill.name);
+        setNotice(t("skDeleted", { name: skill.name }));
         await refresh();
       } catch (err) {
         setError(errText(err));
@@ -135,48 +297,48 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       h("div", { className: "smx-row__main" },
         h("div", { className: "smx-row__top" },
           h("span", { className: "smx-row__name" }, skill.name),
-          skill.readonly ? h(Badge, { tone: "muted" }, "只读") : null,
+          skill.readonly ? h(Badge, { tone: "muted" }, t("skReadonly")) : null,
           h("span", { className: "smx-row__path" }, skill.path),
         ),
         skill.description ? h("div", { className: "smx-row__desc" }, skill.description) : null,
       ),
       h("div", { className: "smx-row__actions" },
         skill.readonly
-          ? h("span", { className: "smx-switchline__label" }, "只读（不可启停）")
+          ? h("span", { className: "smx-switchline__label" }, t("skReadonlyHint"))
           : h("label", { className: "smx-switchline" },
               h(Switch, { checked: skill.modelInvocable, onChange: () => toggle(skill) }),
-              h("span", { className: "smx-switchline__label" }, skill.modelInvocable ? "模型可见" : "模型隐藏"),
+              h("span", { className: "smx-switchline__label" }, skill.modelInvocable ? t("skModelVisible") : t("skModelHidden")),
             ),
-        h("button", { type: "button", className: "smx-btn", onClick: () => open(skill) }, "打开"),
+        h("button", { type: "button", className: "smx-btn", onClick: () => open(skill) }, t("skOpen")),
         skill.readonly
           ? null
           : confirming === skill.name
             ? h("span", { className: "smx-confirm" },
-                h("button", { type: "button", className: "smx-btn smx-btn--danger", onClick: () => remove(skill) }, "确认删除整个文件夹"),
-                h("button", { type: "button", className: "smx-btn", onClick: () => setConfirming("") }, "取消"),
+                h("button", { type: "button", className: "smx-btn smx-btn--danger", onClick: () => remove(skill) }, t("skConfirmDelete")),
+                h("button", { type: "button", className: "smx-btn", onClick: () => setConfirming("") }, t("cancel")),
               )
-            : h("button", { type: "button", className: "smx-btn smx-btn--ghost", onClick: () => setConfirming(skill.name) }, "删除"),
+            : h("button", { type: "button", className: "smx-btn smx-btn--ghost", onClick: () => setConfirming(skill.name) }, t("delete")),
       ),
     ));
 
     return h("div", { className: "smx" },
       h("div", { className: "smx-head" },
         h("span", { className: "smx-count" }, skills
-          ? String(skills.length) + " 个技能 · 模型可见 " + skills.filter((s) => s.modelInvocable).length + " 个"
+          ? t("skCount", { total: skills.length, visible: skills.filter((s) => s.modelInvocable).length })
           : ""),
-        h("button", { type: "button", className: "smx-btn", onClick: refresh }, "刷新"),
+        h("button", { type: "button", className: "smx-btn", onClick: refresh }, t("refresh")),
       ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,
       error ? h(Notice, { kind: "error", onDismiss: () => setError("") }, error) : null,
-      loading ? h(Empty, null, "加载中\u2026")
-        : skills && skills.length === 0 ? h(Empty, null, "没有可管理的技能（bundle 型 SKILL.md）")
+      loading ? h(Empty, null, t("loading"))
+        : skills && skills.length === 0 ? h(Empty, null, t("skNoSkills"))
         : h("ul", { className: "smx-list" }, rows),
     );
   }
 
   // ── MCP panel ────────────────────────────────────────────────────────────
   const TIERS = ["eager", "on-demand", "disabled"];
-  const TIER_LABEL = { "eager": "常驻", "on-demand": "按需", "disabled": "关闭" };
+  const TIER_LABEL = () => ({ "eager": t("tierEager"), "on-demand": t("tierOnDemand"), "disabled": t("tierDisabled") });
   const TIER_TONE = { "eager": "success", "on-demand": "info", "disabled": "muted" };
 
   function McpPanel() {
@@ -221,13 +383,13 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     async function saveToolDesc() {
       const value = Number(toolDescDraft);
       if (!Number.isInteger(value) || value <= 0 || value > 5000) {
-        setError("工具描述截断必须是 1–5000 的正整数");
+        setError(t("mcpToolDescInvalid"));
         return;
       }
       try {
         await postJson("/skill-mcp-manager/settings", { toolDescriptionMaxLength: value });
         setToolDescMax(value);
-        setNotice("已更新工具描述截断为 " + value);
+        setNotice(t("mcpToolDescUpdated", { value }));
       } catch (err) {
         setError(errText(err));
       }
@@ -243,7 +405,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       try {
         const upgrading = entry.tier === "on-demand" && tier === "eager";
         await postJson("/skill-mcp-manager/mcp/tier", { name: entry.name, tier });
-        setNotice(upgrading ? "已升至 eager（运行中注册，前缀失效一次）" : "已切换 \u300c" + entry.name + "\u300d 到 " + tier);
+        setNotice(upgrading ? t("mcpUpgraded") : t("mcpSwitched", { name: entry.name, tier }));
         await refresh(reveal);
       } catch (err) {
         setError(errText(err));
@@ -257,7 +419,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           tool: tool.name,
           enabled,
         });
-        setNotice("已" + (enabled ? "启用 " : "禁用 ") + entry.name + "/" + tool.name);
+        setNotice(enabled ? t("mcpToolEnabled", { name: entry.name, tool: tool.name }) : t("mcpToolDisabled", { name: entry.name, tool: tool.name }));
         await refresh(reveal);
       } catch (err) {
         setError(errText(err));
@@ -269,7 +431,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       try {
         const data = await postJson("/skill-mcp-manager/mcp/load", { name: entry.name, peek: peek === true });
         setOutput(data.text || "");
-        setNotice(peek ? "已查看描述" : "已刷新快照");
+        setNotice(peek ? t("mcpPeeked") : t("mcpRefreshed"));
         await refresh(reveal);
       } catch (err) {
         setError(errText(err));
@@ -280,7 +442,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       setConfirming("");
       try {
         await postJson("/skill-mcp-manager/mcp/delete", { name: entry.name });
-        setNotice("已删除 " + entry.name);
+        setNotice(t("mcpDeleted", { name: entry.name }));
         setDetail("");
         await refresh(reveal);
       } catch (err) {
@@ -292,7 +454,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       const keys = Object.keys(entry.env || {});
       if (keys.length === 0) return null;
       return h("div", { className: "smx-detail__section" },
-        h("div", { className: "smx-detail__label" }, "环境变量"),
+        h("div", { className: "smx-detail__label" }, t("mcpEnvLabel")),
         keys.map((k) => kv(k, entry.env[k])),
       );
     }
@@ -309,12 +471,12 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     function toolsSection(entry) {
       if (!entry.tools || entry.tools.length === 0) {
         return h("div", { className: "smx-detail__section" },
-          h("div", { className: "smx-detail__label" }, "工具"),
-          h(Empty, null, "无工具快照（请刷新快照）"),
+          h("div", { className: "smx-detail__label" }, t("mcpToolsLabel")),
+          h(Empty, null, t("mcpNoTools")),
         );
       }
       return h("div", { className: "smx-detail__section" },
-        h("div", { className: "smx-detail__label" }, "工具 (" + entry.tools.length + ")"),
+        h("div", { className: "smx-detail__label" }, t("mcpToolsCount", { count: entry.tools.length })),
         h("ul", { className: "smx-tools" },
           entry.tools.map((tool) => h("li", {
             key: tool.name,
@@ -323,11 +485,11 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
             h("select", {
               className: cx("smx-tool__tier", tool.enabled === false && "is-disabled"),
               value: tool.enabled === false ? "disabled" : "enabled",
-              "aria-label": tool.name + " 档位",
+              "aria-label": t("mcpToolTierAria", { name: tool.name }),
               onChange: (event) => setToolEnabled(entry, tool, event.target.value === "enabled"),
             },
-              h("option", { value: "enabled" }, "启用"),
-              h("option", { value: "disabled" }, "禁用"),
+              h("option", { value: "enabled" }, t("mcpOptEnabled")),
+              h("option", { value: "disabled" }, t("mcpOptDisabled")),
             ),
             h("span", { className: "smx-tool__name" }, tool.name),
             tool.description ? h("span", { className: "smx-tool__desc" }, tool.description) : null,
@@ -339,32 +501,32 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     function detailBlock(entry) {
       return h("div", { className: "smx-detail" },
         h("div", { className: "smx-detail__section" },
-          h("div", { className: "smx-detail__label" }, "档位"),
+          h("div", { className: "smx-detail__label" }, t("mcpTierLabel")),
           h("select", {
             className: "smx-select",
             value: entry.tier,
             onChange: (e) => setTier(entry, e.target.value),
-          }, TIERS.map((t) => h("option", { key: t, value: t }, TIER_LABEL[t] + " (" + t + ")"))),
+          }, TIERS.map((tier) => h("option", { key: tier, value: tier }, TIER_LABEL()[tier] + " (" + tier + ")"))),
         ),
-        kv("传输", entry.transport),
-        entry.serverDescription ? kv("描述", entry.serverDescription) : null,
-        entry.serverName ? kv("服务器自报名", entry.serverName) : null,
-        entry.serverVersion ? kv("版本", entry.serverVersion) : null,
-        entry.serverTitle ? kv("标题", entry.serverTitle) : null,
-        entry.websiteUrl ? kv("网站", entry.websiteUrl) : null,
-        entry.command !== null && entry.command !== undefined ? kv("命令", entry.command) : null,
-        (entry.args || []).length > 0 ? kv("参数", (entry.args || []).join(" ")) : null,
+        kv(t("kvTransport"), entry.transport),
+        entry.serverDescription ? kv(t("kvDescription"), entry.serverDescription) : null,
+        entry.serverName ? kv(t("kvServerName"), entry.serverName) : null,
+        entry.serverVersion ? kv(t("kvVersion"), entry.serverVersion) : null,
+        entry.serverTitle ? kv(t("kvTitle"), entry.serverTitle) : null,
+        entry.websiteUrl ? kv(t("kvWebsite"), entry.websiteUrl) : null,
+        entry.command !== null && entry.command !== undefined ? kv(t("kvCommand"), entry.command) : null,
+        (entry.args || []).length > 0 ? kv(t("kvArgs"), (entry.args || []).join(" ")) : null,
         entry.url ? kv("URL", entry.url) : null,
-        entry.cwd ? kv("工作目录", entry.cwd) : null,
-        entry.instructions ? kv("使用说明", entry.instructions) : null,
-        entry.notes ? kv("备注", entry.notes) : null,
-        entry.lastLoadAt ? kv("上次刷新快照", entry.lastLoadAt) : null,
+        entry.cwd ? kv(t("kvCwd"), entry.cwd) : null,
+        entry.instructions ? kv(t("kvInstructions"), entry.instructions) : null,
+        entry.notes ? kv(t("kvNotes"), entry.notes) : null,
+        entry.lastLoadAt ? kv(t("kvLastLoad"), entry.lastLoadAt) : null,
         envRows(entry),
         headerRows(entry),
         toolsSection(entry),
         h("div", { className: "smx-detail__actions" },
-          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, true) }, "查看描述"),
-          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, false) }, "刷新快照"),
+          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, true) }, t("mcpPeekAction")),
+          h("button", { type: "button", className: "smx-btn", onClick: () => run(entry, false) }, t("mcpRefreshAction")),
         ),
         output ? h("pre", { className: "smx-output" }, output) : null,
       );
@@ -376,20 +538,20 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         h("div", { className: "smx-row__main" },
           h("div", { className: "smx-row__top" },
             h("span", { className: "smx-row__name" }, entry.name),
-            h(Badge, { tone: TIER_TONE[entry.tier] || "muted" }, TIER_LABEL[entry.tier] || entry.tier),
+            h(Badge, { tone: TIER_TONE[entry.tier] || "muted" }, TIER_LABEL()[entry.tier] || entry.tier),
             entry.transport ? h("span", { className: "smx-row__meta" }, entry.transport) : null,
-            h("span", { className: "smx-row__meta" }, entry.toolCount + " 工具"),
+            h("span", { className: "smx-row__meta" }, t("mcpToolCount", { count: entry.toolCount })),
           ),
           entry.serverDescription ? h("div", { className: "smx-row__desc" }, entry.serverDescription) : null,
         ),
         h("div", { className: "smx-row__actions" },
-          h("button", { type: "button", className: "smx-btn", onClick: () => setDetail(isOpen ? "" : entry.name) }, isOpen ? "收起" : "详情"),
+          h("button", { type: "button", className: "smx-btn", onClick: () => setDetail(isOpen ? "" : entry.name) }, isOpen ? t("mcpCollapse") : t("mcpDetails")),
           confirming === entry.name
             ? h("span", { className: "smx-confirm" },
-                h("button", { type: "button", className: "smx-btn smx-btn--danger", onClick: () => remove(entry) }, "确认删除条目"),
-                h("button", { type: "button", className: "smx-btn", onClick: () => setConfirming("") }, "取消"),
+                h("button", { type: "button", className: "smx-btn smx-btn--danger", onClick: () => remove(entry) }, t("mcpConfirmDeleteEntry")),
+                h("button", { type: "button", className: "smx-btn", onClick: () => setConfirming("") }, t("cancel")),
               )
-            : h("button", { type: "button", className: "smx-btn smx-btn--ghost", onClick: () => setConfirming(entry.name) }, "删除"),
+            : h("button", { type: "button", className: "smx-btn smx-btn--ghost", onClick: () => setConfirming(entry.name) }, t("delete")),
         ),
         isOpen ? detailBlock(entry) : null,
       );
@@ -397,14 +559,14 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
 
     return h("div", { className: "smx" },
       h("div", { className: "smx-head" },
-        h("span", { className: "smx-count" }, entries ? String(entries.length) + " 个服务器" : ""),
+        h("span", { className: "smx-count" }, entries ? t("mcpServers", { total: entries.length }) : ""),
         h("div", { className: "smx-head__meta" },
-          h("button", { type: "button", className: "smx-btn", onClick: toggleReveal }, reveal ? "隐藏密钥" : "显示密钥"),
-          h("button", { type: "button", className: "smx-btn", onClick: () => refresh(reveal) }, "刷新"),
+          h("button", { type: "button", className: "smx-btn", onClick: toggleReveal }, reveal ? t("mcpHide") : t("mcpReveal")),
+          h("button", { type: "button", className: "smx-btn", onClick: () => refresh(reveal) }, t("refresh")),
         ),
       ),
       h("div", { className: "smx-setting" },
-        h("span", { className: "smx-setting__label" }, "工具描述截断（字符）"),
+        h("span", { className: "smx-setting__label" }, t("mcpToolDescLabel")),
         h("input", {
           type: "number",
           className: "smx-input",
@@ -413,13 +575,13 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           max: 5000,
           onChange: (e) => setToolDescDraft(e.target.value),
         }),
-        h("button", { type: "button", className: "smx-btn", onClick: saveToolDesc }, "保存"),
-        h("span", { className: "smx-count" }, "当前 " + toolDescMax),
+        h("button", { type: "button", className: "smx-btn", onClick: saveToolDesc }, t("mcpSave")),
+        h("span", { className: "smx-count" }, t("mcpCurrent", { value: toolDescMax })),
       ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,
       error ? h(Notice, { kind: "error", onDismiss: () => setError("") }, error) : null,
-      loading ? h(Empty, null, "加载中\u2026")
-        : entries && entries.length === 0 ? h(Empty, null, "没有已注册的 MCP 服务器")
+      loading ? h(Empty, null, t("loading"))
+        : entries && entries.length === 0 ? h(Empty, null, t("mcpNoEntries"))
         : h("ul", { className: "smx-list" }, rows),
     );
   }
@@ -429,11 +591,11 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     const [tab, setTab] = useState("skills");
     return h("div", { className: "smx" },
       h("header", { className: "smx-header" },
-        h("h2", { className: "smx-title" }, "能力库 (Capability)"),
-        h("div", { className: "smx-subtitle" }, "管理 Agent 的 Skill 与 MCP"),
+        h("h2", { className: "smx-title" }, t("title")),
+        h("div", { className: "smx-subtitle" }, t("subtitle")),
       ),
       h("div", { className: "smx-tabs" },
-        h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, "技能"),
+        h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, t("tabSkills")),
         h("button", { type: "button", className: cx("smx-tab", tab === "mcp" && "is-active"), onClick: () => setTab("mcp") }, "MCP"),
       ),
       tab === "skills" ? h(SkillsPanel) : h(McpPanel),
@@ -516,14 +678,18 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
 
   // ── apply ────────────────────────────────────────────────────────────────
   function apply(ctx) {
+    LANG = detectLang(ctx);
+    try {
+      ctx.on("locale/change", () => { LANG = detectLang(ctx); });
+    } catch (e) { /* no locale events */ }
     injectCss();
     ctx.slots.inject("settings.section", () => ctx.slots.register({
       name: "settings.section",
       id: "capability",
       order: 35,
-      label: "能力库",
+      label: t("sectionLabel"),
     }, ManagerSection));
   }
 
-  return { name, inject, apply };
+  return { name, inject, apply, __i18n: { t, I18N } };
 }});
