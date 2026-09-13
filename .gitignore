@@ -2,7 +2,7 @@ node_modules/
 *.log
 .DS_Store
 dist/
-.test-data/
+.test-*/
 .playwright-mcp/
 pnpm-lock.yaml
 test/patch.yml
