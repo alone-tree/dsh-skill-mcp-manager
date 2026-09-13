@@ -15,7 +15,9 @@
 lib/index.js    宿主主模块：MCP 三件套、连接/快照、导入接管、reconcile、预热、catalog 注入、UI RPC handlers
 lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvocation）
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
+lib/session-audit.js 历史会话审核（一次性，只读）：切帧 + 逐帧解码检出旧版 source，唯一写入是插件自己的 session-audit.json
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
+tools/repair-legacy-sessions.mjs 一次性修复脚本（逐帧重压 + 备份 + 回读复核，默认试运行）；须自包含，因为修复指引 issue 内嵌了它的全文
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
@@ -63,8 +65,9 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **管理页 Skill 列表要带 preset scope**：内建 `dsh-skill-filesystem` 挂在 agent preset 层。`ctx.skills.list()` 不传 `scope` 只看全局层（本插件递归 provider）；AI 目录注入传 `scope: agent` 所以能看到 `~/.dsh/skills`。Host UI 用 `ctx.get("agentPresets")?.standingKeyFor()` 作为 scope。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
 - **托管块外零残留**：`reconcile` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 之间的内容；托管块外被注册表认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理），未认领行原样保留，非 MCP 内容 byte-for-byte 保留。夹在中间的非 MCP 行挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
-- **注入零双重标准（2026-09-07）**：任何注入到模型的消息，GUI「上下文注入」卡片展开后人类看到的就是模型收到的原文——插件注入**不声明宿主的结构化 form**（缺省/未知 form 由宿主 OpaqueBody 渲染模型正文原文），且 **source 不携带正文之外的冗余数据**（OpaqueBody 的 SourceFields 会显示 source 每个字段，携带 entries 会把同一信息渲染两遍）。source = `{kind, digest}`。
-- **目录注入 digest 驱动 + eventAt 倒序**：注入正文与 digest 由同一份 entries 投影（name/tier/description/notes/启用工具 name+description）派生，digest 写入 source 作为持久化投影（宿主对 source 保真，真机实证）；可见性判定用 `session.eventAt` 倒序遍历持久日志、从最新可见的 `mcp-catalog` 读 digest 字段对比（宿主 Session 无 `events` 属性——公开 API 是 `eventAt`/`seq`/`snapshotEvents`，不要读 `session.events`；digest 缺失/损坏的记录视为「非本插件目录」）。digest 变了才重新注入（追加替换，不改历史）；是否已注入看会话 surface 上可见的 `mcp-catalog`（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，digest 未变也必须重注。测试 mock 必须模拟真机 Session 形状（`seq` + `eventAt` + `surface.nodes`），不要模拟 `session.events`。
+- **注入零双重标准（2026-09-07）**：任何注入到模型的消息，GUI「上下文注入」卡片展开后人类看到的就是模型收到的原文——插件注入**不声明宿主的结构化 form**（缺省/未知 form 由宿主 OpaqueBody 渲染模型正文原文），且 **source 不携带正文之外的冗余数据**（OpaqueBody 的 SourceFields 会显示 source 每个字段，携带 entries 会把同一信息渲染两遍）。source = `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`。
+- **注入 source 只用内核已认识的形状（2026-09-11 事故教训）**：released 迁移边用**封闭集合**审计 message source——v2→v3 的 `SOURCE_KINDS` 只认 15 个内置 kind，v0→v1 的 `pluginSourceValue` 对 `plugin` 源只放行 `{kind, plugin}` + `form`/`sections`/`summary`。自定义 kind 或 `digest` 成员会让**历史日志在下一次格式换代时整体打不开**（本机 552/574 个 v0 会话因此失效；v3 新会话却一切正常，因为 v3 读写不审计 kind）。插件写入会话的消息，只能用内核 `MessageSourceMap` 里已建模的 event type / source kind / content kind。
+- **目录注入按正文判等 + eventAt 倒序**：entries 投影（name/tier/description/notes/启用工具 name+description）唯一决定模型可见正文；该正文已随消息 content 持久化，故不再另存 digest（`plugin` 源也没有放 digest 的位置）。可见性判定用 `session.eventAt` 倒序遍历持久日志、取 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染的正文**逐字比对**（宿主 Session 无 `events` 属性——公开 API 是 `eventAt`/`seq`/`snapshotEvents`，不要读 `session.events`；source 不是本插件归属、或正文缺失/损坏的记录视为「非本插件目录」）。正文变了才重新注入（追加替换，不改历史）；是否已注入看会话 surface 上可见的目录消息（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，正文未变也必须重注。测试 mock 必须模拟真机 Session 形状（`seq` + `eventAt` + `surface.nodes`）并回写**完整 message（content + source）**，不要模拟 `session.events`，也不要只回写 source。
 - **MCP 单工具禁用 = 黑名单 + 双调用边界**：`entry.disabledTools` 保存原始工具名，新工具默认启用；禁用工具从 eager 注册、目录和 `mcp_load` 隐藏，但安全保证来自 eager `execute` 与 `mcp_call` 在 `tools/call` 前再次拒绝。`mcp_register` 不提供黑名单修改参数，只有管理 UI 可改。已开始的调用不强制中断。
 - **mcp_call 参数形状守卫 + 错误上下文**：`mcp_call` 入口运行时校验 `tool`（非空字符串）与 `args`（对象或省略），报错附正确形状，**只报错不自动解包**；工具调用失败（协议错误与 `isError` 结果两类）的错误消息统一附加 server/tool 与实参 JSON（协议错误另附 inputSchema，各截断 2000 字符），桥与 eager `execute` 共用此实现。**真机实测（2026-09-07）**：DSH 宿主会对 `required` 违例调用先清洗参数，真实环境下守卫主要走"缺 tool"分支，嵌套形状识别是防御性冗余（mock 直调 handler 可达）；不要假设宿主会替插件做参数校验。
 
@@ -99,11 +102,12 @@ node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过�
 node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
+node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
+node test/repair-tool-smoke.mjs # 一次性修复脚本：三种 source 形状、跨帧中止、幂等、备份与清理
 
-# 重装进 desktop profile（file: 依赖要 remove+add 才刷新）
+# 装进 desktop profile（本机已用 link:，改源码后重启 DSH 即生效，不必重装）
 cd ~/.dsh/profiles/desktop
-pnpm remove dsh-skill-mcp-manager
-pnpm add "file:D:/Github/dsh-skill-mcp-manager"
+pnpm add "link:D:/Github/dsh-skill-mcp-manager"
 # 然后重启 DSH
 ```
 
@@ -126,7 +130,8 @@ pnpm add "file:D:/Github/dsh-skill-mcp-manager"
 
 ## 常见坑
 
-- **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。
+- **`file:` 依赖是拷贝，改源码后重启 DSH 完全无效**（2026-09-11 实际踩到，本机一度跑着一周前的代码）：profile 里 `file:` 装的插件是**真实文件副本**，仓库源码改动不会跟过去。本机 desktop profile 已改为 `link:`——pnpm 在 Windows 上把它实现为 **Junction**（同 profile 的 `dsh-pocket` 也是这个形态），改源码后重启 DSH 即生效。两点注意：① `link:` 后插件从**源目录**解析依赖，仓库自己的 `node_modules` 必须装齐（含 peerDeps，用 `pnpm install --config.auto-install-peers=true`），宿主的 `@deepseek-ai/*` 仍由 DSH 加载器按 specifier 提供，不受物理位置影响；② pnpm 会把该插件的依赖树从 profile 的锁文件里移除（本机实测 779 行删除 / 2 行新增），属预期。
+- **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。同一个 `__test__` 哨兵也被历史会话审核用来跳过扫描——否则每个调用 `apply()` 的测试都会去读真实的 `~/.dsh/sessions`（本机实测每个测试多花 30–50 秒，且违反隔离约定）。
 - **import-smoke 的 MCP URL 用本地死端口**（`http://127.0.0.1:1/`）：预热会尝试连接，别让它真连外部服务。
 - **前端加了新的 GET+POST 同 path 路由**：必须合并成单条 handler（见上文）。
 - **bundle 自动挂载 + 用户补丁旧 insert 行 = 组合无法启动**（2026-08-28 实际发生过）：包自带的 `cordis.patch.yml`（`dsh.bundle.patch`）会自动 insert 挂载行；从手动挂载时代升级过来的 profile 若还留着同 id 的手写 insert 行，组合里出现两行同 id，所有插件更新的 trial 校验都会失败回滚，且**下次重启无法启动**。修复：用户补丁里改成同 id 的纯配置覆盖行（不写 insert）。本机 desktop profile 已于 2026-08-28 修复并校验通过。

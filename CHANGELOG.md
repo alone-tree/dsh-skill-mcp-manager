@@ -2,6 +2,22 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **历史会话审核 + 一次性修复指引**：改掉写入格式只能保证"以后不再产生坏数据"，救不回已经落盘的旧会话。现在**在启动流程里**（预热等慢步骤之前 `await`）只读扫描 `~/.dsh/sessions` 里 v0 命名的日志，这样首次安装的结果在**页面打开时**就已在屏幕上，而不是用户用了一会儿才发现；代价是首次启动要等扫描完成（有坏日志时很快，干净的大库 30–50 秒，只付一次）。检出受影响会话后在「设置 → 能力库」顶部显示提示、并弹一次浮层通知（浮层的关闭只作用于本次会话，**横幅没有关闭按钮**——误点不可能把真问题藏起来）。整个机制只有记录文件里的一个布尔 `check`：为真才扫；扫到受影响就保持为真并每次启动重新提示；扫到 0 就静默把它改假、跳过汇报、以后不再扫——这一条同时让"已修好"和"从来没有过旧日志"的机器都不再付扫描成本（干净的大库因为无法提前退出，扫得更慢）。只读，绝不写任何会话日志。测试：`test/session-audit-smoke.mjs`。
+- **仓库内一次性修复脚本 `tools/repair-legacy-sessions.mjs`**：按帧切分只重压内容变化的那几帧、写前备份、逐行 `JSON.parse` + 序列化回环校验、跨帧对象中止、组装后回读复核；默认试运行，`--apply` 才写入，`--cleanup-backups` 删备份。纯 Node（≥22.15 内置 zstd），无外部依赖、跨平台。测试：`test/repair-tool-smoke.mjs`。
+- **修复指引 issue**：https://github.com/alone-tree/dsh-skill-mcp-manager/issues/2 —— 含报错原文（供 AI/搜索命中）、根因、脚本全文，以及给 AI 的分步操作说明；插件的提示与 `/mcp` 命令都指向它。
+
+### Fixed
+
+- **注入 source 改用内核已认识的插件归属形态，历史会话不再整体打不开**：`mcp-catalog` 是插件自定义的 `source.kind`，既不在内核 released 迁移边的封闭集合（v2→v3 `SOURCE_KINDS`，15 个内置 kind）里，也不在 v0→v1 `pluginSourceValue` 允许的成员集内。DSH 桌面端 2.0.9 起打开旧会话必然走 v0→v3 迁移链，因此本机 574 个 v0 会话中 **552 个整体打不开**（`cannot safely transform unclassified message source`），而插件在 v3 新会话里一切正常——被拒的只有迁移这一条路径，因为 v3 读写不审计 kind（2026-09-11 事故）。现改为 `source: {kind:"plugin", plugin:"dsh-skill-mcp-manager"}`：`plugin` 是内核 `MessageSourceMap` 里正式建模的第三方插件形态，只带 `kind`/`plugin` 两个成员，落在每一条 released 迁移边的准入集合内。
+
+### Changed
+
+- **目录注入的判据从 digest 改为注入正文本身**：`plugin` 源只放行 `{kind, plugin}` + `form`/`sections`/`summary`，`digest` 无处安放；而 digest 本就只是 entries 投影的哈希形式，正文（同一份 entries 渲染而来）已随消息 content 持久化，属冗余副本。现在可见性判定取会话 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染出的正文逐字比对，相同则跳过。业务行为不变：该注入才注入、压缩后重新追加、人类展开看到的仍是模型原文。副作用：2026-09-11 就地修复过的 552 个历史日志正是本形态，插件重新认得它们，续聊不再多注入一次目录。测试 mock 改为回写完整 message（content + source），并新增「source 无正文不得算可见」「他人 source 不得算本插件目录」「已修复的历史日志必须认得」三个用例。
+
 ## [1.1.4] — 2026-09-07
 
 ### Fixed

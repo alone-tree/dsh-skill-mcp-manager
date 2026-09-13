@@ -238,8 +238,8 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 5.9 启动注入（ContextInjector）
 
-- `agent/pre-step` enter 模式，source kind `mcp-catalog`：**不声明宿主的结构化 form**——缺省/未知 form 由宿主按 OpaqueBody 渲染注入正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文（零双重标准，2026-09-07 已定）；source 仅含 `{kind, digest}`（SourceFields 显示 source 全部字段，携带 entries 会把同一信息渲染两遍）。注入内容：所有非 disabled 档位的「名字 + (tier) + 描述 + notes（仅 on-demand）+ 启用工具名 + 工具描述」（描述/工具描述按 `catalogDescriptionMaxLength`/`toolDescriptionMaxLength` 截断）。数据源 = registry 快照（只读不连接）。
-- **正文与 digest 同源**：两者由同一份 entries 投影（name/tier/description/notes/tools）派生，digest 写入 source 作为持久化投影。可见性判定用 `session.eventAt` 倒序遍历会话日志，对 surface 上仍可见的最新 `mcp-catalog` 读 digest 字段对比——宿主 Session 没有 `events` 属性（公开 API 为 `eventAt`/`seq`/`snapshotEvents`），不读 `session.events`；digest 缺失/损坏的记录视为「非本插件目录」。digest 变化才追加替换；是否已注入以会话 surface 上可见的 `mcp-catalog` 为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加。
+- `agent/pre-step` enter 模式，source = `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`：**不声明宿主的结构化 form**——缺省/未知 form 由宿主按 OpaqueBody 渲染注入正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文（零双重标准，2026-09-07 已定）；source 也只有这两个成员——SourceFields 显示 source 全部字段，携带 entries 会把同一信息渲染两遍，而 released 迁移边的封闭 kind 审计只放行 `{kind, plugin}` + `form`/`sections`/`summary`，自定义 kind 与 `digest` 成员都会让历史日志打不开（2026-09-11 事故）。注入内容：所有非 disabled 档位的「名字 + (tier) + 描述 + notes（仅 on-demand）+ 启用工具名 + 工具描述」（描述/工具描述按 `catalogDescriptionMaxLength`/`toolDescriptionMaxLength` 截断）。数据源 = registry 快照（只读不连接）。
+- **判据是注入正文本身（2026-09-11 起）**：entries 投影（name/tier/description/notes/tools）唯一决定模型可见正文，而该正文已随消息 content 持久化，因此不再另存 digest。可见性判定用 `session.eventAt` 倒序遍历会话日志，取 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染出的正文逐字比对，相同则跳过——宿主 Session 没有 `events` 属性（公开 API 为 `eventAt`/`seq`/`snapshotEvents`），不读 `session.events`；source 不是本插件归属、或正文缺失/损坏的记录视为「非本插件目录」。正文变化才追加替换；是否已注入以会话 surface 上可见的目录消息为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加。
 
 ### 5.10 系统配置 reconcile（防"删插件丢配置"，仅所在 profile）
 
@@ -259,15 +259,30 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 | 触发                  | 机制                                                       | 重启 DSH     |
 | --------------------- | ---------------------------------------------------------- | ------------ |
 | MCP 代码变化（stdio） | `mcp_load` 重连新生进程                                  | 否           |
-| 工具列表/描述变化     | `mcp_load` → listTools → 世代替换 + 快照 + digest 追加 | 否           |
+| 工具列表/描述变化     | `mcp_load` → listTools → 世代替换 + 快照 + 目录正文变化后追加 | 否           |
 | 只看描述不动生命周期  | `mcp_load(peek=true)`                                    | 否（不掉线） |
 | 插件自身更新          | 换包                                                       | 一次         |
+
+### 5.12 历史会话审核（一次性，只读）
+
+> 背景：1.1.5 之前插件写自定义 `source.kind`，DSH 2.0.9 的 v0→v3 迁移边用封闭集合审计 message source，导致旧会话整体打不开（2026-09-11 事故）。改掉写入格式只能保证"以后不再产生坏数据"，救不回已经落盘的——那批要靠仓库里的一次性脚本（`tools/repair-legacy-sessions.mjs`）修。
+
+- **触发**：在启动流程里执行（`await` 于 `apply()`，位置在预热/server 等慢步骤之前），这样首次安装就能在**页面打开时**看到结果，而不是用户用了一会儿才发现。代价是首次启动会等扫描完成：有坏日志时很快（命中即退出），干净的大库要 30–50 秒；但扫到 0 会自动退休 `check`，所以这个代价只付一次。
+- **范围**：`<DSH_HOME>/sessions/**/session.jsonl[.zstd]`——只认 v0 命名；当前代（`session.v<N>.…`）从不参与 v0→v3 迁移，不扫。
+- **方式**：按帧切分后**同步逐帧**解压，命中 `"kind":"mcp-catalog"` 即返回。逐帧解码是必须的：`zstdDecompressSync` **和流式解压器都只解第一帧**（本机实测 574 份文件一次性解码只得到 135 KB，即各文件的首帧）；异步 zstd 反而慢 4–5 倍（每帧一次线程池往返，本机 31s → 72s@并发4 → 144s串行）。文件之间每 100ms 让出一次事件循环。**全程只读，绝不写任何会话日志。**
+- **唯一机制是一个布尔 `check`**，存在 `~/.dsh/skill-mcp-manager/session-audit.json`：
+  - `check` 为假 → 什么都不做，连扫描都不跑。
+  - `check` 为真 → 扫描；`affected > 0` 则保持为真并在**每次启动**重新提示；`affected === 0` 则**静默把它改假、跳过汇报**，此后不再扫描。
+  - 最后一条同时解决两件事：已修好的机器不必每次启动白等（干净的大库无法提前退出，扫得更慢），以及从来没出现过旧日志的新装机根本不会被打扰。
+- **提示**：设置页顶部横幅（无关闭按钮——误点不能把真问题藏起来）+ 一次性浮层通知（关闭只作用于本次会话，不写任何状态）。客户端在 `pending` 或 `affected > 0` 期间每 5 秒重查一次（上限 3 分钟），否则扫描完成后的结果要等下次刷新才可见。
+- **兜底**：如果用户决定不修，把记录里的 `"check"` 改成 `false` 即停；这一条写在修复指引 issue 里。
+- **测试**：`test/session-audit-smoke.mjs`（候选筛选、三种形状、正文转义提及不误判、已修形态判干净、明文日志、受影响保持重扫、扫到 0 静默退休、退休后不重写记录、空库立即退休、缺失根目录不报错）。
 
 ---
 
 ## 6. 注入与 KV 缓存设计（统一原则）
 
-1. 只追加不改写；digest 驱动；source kinds：`skill-catalog`（内建 `dsh-tool-skill`）、`mcp-catalog`（本插件）。两者都以会话 surface 上是否还有可见目录判断是否重注；压缩后旧目录不在 surface 上则重新追加。
+1. 只追加不改写；注入正文变化驱动；source kind：内建 `skill-catalog`（`dsh-tool-skill`，自带 kind 与 `form:"catalog"`），本插件用通用插件归属 `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`（不带 form/digest，按注入正文判等，理由见 §5.9）。两者都以会话 surface 上是否还有可见目录判断是否重注；压缩后旧目录不在 surface 上则重新追加。
 2. 前缀失效仅发生在"模型可见工具 schema 集合运行中变化"（§5.6 总表）；注入消息永远只走尾部追加。
 
 ---

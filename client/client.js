@@ -70,6 +70,101 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     return h("div", { className: "smx-empty" }, props.children);
   }
 
+  // ── legacy session notice ────────────────────────────────────────────────
+  // Sessions written before 1.1.5 cannot be opened once DSH reaches 2.0.9. The
+  // host scans for them on every start while its `check` flag is set, reports the
+  // count, and retires the flag by itself once a scan finds nothing. This only
+  // points at the repair guide — nothing here repairs anything, and there is no
+  // dismiss: an accidental click must not be able to hide a real problem.
+  const REPAIR_GUIDE_URL = "https://github.com/alone-tree/dsh-skill-mcp-manager/issues/2";
+  const AUDIT_POLL_MS = 5000;
+  const AUDIT_POLL_LIMIT = 36;
+
+  // The host answers `pending` until this start's scan lands, and the scan may
+  // take tens of seconds on a large library — so a record read early can still
+  // be the previous start's. Poll while either is in flight, otherwise a notice
+  // for a problem that has just been repaired would stay on screen all session.
+  function useLegacyAudit() {
+    const [audit, setAudit] = useState(null);
+    useEffect(() => {
+      let cancelled = false;
+      let timer = null;
+      let attempts = 0;
+      const load = async () => {
+        try {
+          const data = await getJson("/skill-mcp-manager/session-audit");
+          if (cancelled) return;
+          setAudit(data);
+          const unsettled = data.pending === true || data.affected > 0;
+          if (unsettled && attempts < AUDIT_POLL_LIMIT) {
+            attempts += 1;
+            timer = setTimeout(load, AUDIT_POLL_MS);
+          }
+        } catch {
+          /* advisory only — a failed fetch stays silent */
+        }
+      };
+      load();
+      return () => {
+        cancelled = true;
+        if (timer !== null) clearTimeout(timer);
+      };
+    }, []);
+    return audit;
+  }
+
+  function legacySessionsOpen(audit) {
+    return audit !== null && audit.pending !== true && audit.check !== false && audit.affected > 0;
+  }
+
+  // Settings-page banner: the full explanation and the repair link. It carries
+  // no close control — it disappears when the host retires the check, which
+  // happens as soon as a scan finds nothing left to report.
+  function LegacySessionBanner() {
+    const audit = useLegacyAudit();
+    if (!legacySessionsOpen(audit)) return null;
+    return h(Notice, { kind: "error" },
+      h("span", { className: "smx-legacy" },
+        h("span", { className: "smx-legacy__title" }, `因 DSH 版本升级，有 ${audit.affected} 个历史会话无法查看`),
+        h("span", null,
+          "DSH 升级后调整了 MCP 注入消息的格式规范，旧会话的 MCP 注入消息不再被支持，打开时会显示",
+          h("code", { className: "smx-legacy__code" }, "历史加载失败：failed to observe session … cannot safely transform unclassified message source"),
+          "。请按本项目 issue 的",
+          h("a", { className: "smx-legacy__link", href: REPAIR_GUIDE_URL, target: "_blank", rel: "noreferrer" }, "一次性修复指引"),
+          "完成修复（脚本会先备份，验收通过后再删除备份）。",
+        ),
+        h("span", { className: "smx-legacy__note" },
+          "修好后不需要手动关闭：下次启动扫描到 0 会自动停止。若你决定不修复这些会话，把 ",
+          h("code", { className: "smx-legacy__code" }, "~/.dsh/skill-mcp-manager/session-audit.json"),
+          " 里的 ",
+          h("code", { className: "smx-legacy__code" }, `"check": false`),
+          " 写入即可停止提示。",
+        ),
+      ),
+    );
+  }
+
+  // Frame-wide notice: re-appears on every start while the check is set. Its
+  // close only hides it for this session — no state is written, so a stray click
+  // costs nothing.
+  function LegacySessionOverlay() {
+    const audit = useLegacyAudit();
+    const [hidden, setHidden] = useState(false);
+    if (hidden || !legacySessionsOpen(audit)) return null;
+    return h("div", { className: "smx-toast", role: "status" },
+      h("div", { className: "smx-toast__main" },
+        h("div", { className: "smx-toast__title" }, `因 DSH 版本升级，有 ${audit.affected} 个历史会话无法查看`),
+        h("div", { className: "smx-toast__text" }, "详情见「设置 → 能力库」，内含一次性修复指引。"),
+      ),
+      h("button", {
+        type: "button",
+        className: "smx-toast__close",
+        title: "本次不再显示",
+        onClick: () => setHidden(true),
+      }, "\u00d7"),
+    );
+  }
+
   function kv(key, value) {
     return h("div", { className: "smx-kv", key },
       h("span", { className: "smx-kv__k" }, key),
@@ -432,6 +527,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         h("h2", { className: "smx-title" }, "能力库 (Capability)"),
         h("div", { className: "smx-subtitle" }, "管理 Agent 的 Skill 与 MCP"),
       ),
+      h(LegacySessionBanner),
       h("div", { className: "smx-tabs" },
         h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, "技能"),
         h("button", { type: "button", className: cx("smx-tab", tab === "mcp" && "is-active"), onClick: () => setTab("mcp") }, "MCP"),
@@ -478,6 +574,18 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     ".smx-notice--success { border-color:var(--dsw-alias-state-success-primary); }",
     ".smx-notice--error { border-color:var(--dsw-alias-state-error-primary); color:var(--dsw-alias-state-error-primary); }",
     ".smx-notice__close { border:none; background:none; color:inherit; cursor:pointer; font-size:14px; padding:0 2px; }",
+    ".smx-legacy { display:flex; flex-direction:column; gap:4px; line-height:1.6; text-align:left; }",
+    ".smx-legacy__title { font-weight:600; }",
+    ".smx-legacy__code { font-family:var(--ds-font-family-code); font-size:11px; padding:1px 4px; border-radius:4px; background:var(--dsw-alias-bg-layer-2); }",
+    ".smx-legacy__link { color:var(--dsw-alias-brand-primary); }",
+    ".smx-legacy__note { color:var(--dsw-alias-label-secondary); }",
+    // The shell overlay layer is a pointer-events:none frame-sized layer whose
+    // direct children stay interactive, so the toast sizes and anchors itself.
+    ".smx-toast { position:absolute; right:16px; bottom:16px; display:flex; align-items:flex-start; gap:10px; max-width:360px; padding:10px 12px; border-radius:10px; border:1px solid var(--dsw-alias-state-error-primary); background:var(--dsw-alias-bg-layer-1); box-shadow:0 8px 28px rgba(0,0,0,.18); pointer-events:auto; }",
+    ".smx-toast__main { min-width:0; }",
+    ".smx-toast__title { font-size:13px; font-weight:600; color:var(--dsw-alias-label-primary); }",
+    ".smx-toast__text { margin-top:4px; font-size:12px; color:var(--dsw-alias-label-secondary); }",
+    ".smx-toast__close { border:none; background:none; color:var(--dsw-alias-label-secondary); cursor:pointer; font-size:15px; line-height:1; padding:0 2px; }",
     ".smx-empty { padding:18px; text-align:center; font-size:12px; color:var(--dsw-alias-label-secondary); }",
     ".smx-confirm { display:inline-flex; gap:6px; align-items:center; }",
     ".smx-detail { display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--dsw-alias-border-l1); padding-top:10px; }",
@@ -523,6 +631,15 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       order: 35,
       label: "能力库",
     }, ManagerSection));
+    // Frame-wide notices belong in the shell overlay, not in a settings page:
+    // `shell.overlay` is a root-scope `list` slot rendered with no props inside
+    // the frame's pointer-events:none layer, so the occupant positions itself
+    // and everything around it stays click-through.
+    ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+      name: "shell.overlay",
+      id: "capability-legacy-sessions",
+      order: 80,
+    }, LegacySessionOverlay));
   }
 
   return { name, inject, apply };
