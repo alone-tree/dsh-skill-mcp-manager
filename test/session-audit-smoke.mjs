@@ -7,6 +7,7 @@ import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { pathToFileURL } from "node:url";
 import zlib from "node:zlib";
 import {
   collectLegacyCandidates,
@@ -170,6 +171,51 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
 {
   const result = await auditSessions(join(tmp, "no-such-root"));
   if (result.scanned !== 0 || result.affected !== 0) failed.push(`missing root must yield an empty audit, got ${JSON.stringify(result)}`);
+}
+
+// ── 8) the audit must stay OUT of the startup path ─────────────────────────
+// Regression guard for 2026-09-14: awaiting the scan inside apply() held
+// `host-boot` open for 123s, past the desktop host's watchdog, and DSH came up
+// in safe mode. Awaited or not is invisible to every other test, so this one
+// asserts the observable consequence — apply() returns before any record exists,
+// because the scan is only *scheduled* there.
+{
+  const startupHome = join(tmp, "startup-home");
+  const startupSession = join(startupHome, "sessions", "--proj--", "session-legacy");
+  await mkdir(startupSession, { recursive: true });
+  await writeFile(join(startupSession, "session.jsonl.zstd"), makeLog([
+    JSON.stringify({ type: "session", version: 0, id: "session-legacy", createdAt: 0 }),
+    event(1, { kind: "mcp-catalog", digest: "x" }),
+  ]));
+
+  // DSH_HOME is read when lib/index.js is evaluated, so set it before importing.
+  process.env.DSH_HOME = startupHome;
+  const startupData = join(tmp, "startup-data");
+  const { apply } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/index.js").href);
+  const ctx = {
+    tools: { register: () => () => {} },
+    skills: { registerProvider: () => () => {} },
+    on: () => () => {},
+    effect: () => () => {},
+    get: () => undefined,
+    logger: { info() {}, warn() {}, error() {} },
+  };
+  // A real profile name, so the `__test__` skip does not hide the audit.
+  await apply(ctx, { dataDir: startupData, profile: "startup-smoke", importNativeMcp: false });
+  if (existsSync(join(startupData, AUDIT_FILE))) {
+    failed.push("apply() must return before the audit runs; a record already exists");
+  }
+  // ...and it must still run, just later.
+  const deadline = Date.now() + 15000;
+  while (!existsSync(join(startupData, AUDIT_FILE)) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (!existsSync(join(startupData, AUDIT_FILE))) {
+    failed.push("the deferred audit never ran");
+  } else {
+    const record = JSON.parse(await readFile(join(startupData, AUDIT_FILE), "utf8"));
+    if (record.affected !== 1 || record.check !== true) failed.push(`deferred audit recorded ${JSON.stringify(record)}`);
+  }
 }
 
 await rm(tmp, { recursive: true, force: true });
