@@ -80,10 +80,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   const AUDIT_POLL_MS = 5000;
   const AUDIT_POLL_LIMIT = 36;
 
-  // The host answers `pending` until this start's scan lands, and the scan may
-  // take tens of seconds on a large library — so a record read early can still
-  // be the previous start's. Poll while either is in flight, otherwise a notice
-  // for a problem that has just been repaired would stay on screen all session.
+  // The host reports a running scan explicitly, and the answer may take tens of
+  // seconds on a large library, so poll while either is unsettled. A settled
+  // check never polls at all.
   function useLegacyAudit() {
     const [audit, setAudit] = useState(null);
     useEffect(() => {
@@ -95,7 +94,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           const data = await getJson("/skill-mcp-manager/session-audit");
           if (cancelled) return;
           setAudit(data);
-          const unsettled = data.pending === true || data.affected > 0;
+          const unsettled = data.scanning === true || data.affected > 0;
           if (unsettled && attempts < AUDIT_POLL_LIMIT) {
             attempts += 1;
             timer = setTimeout(load, AUDIT_POLL_MS);
@@ -114,12 +113,48 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   }
 
   function legacySessionsOpen(audit) {
-    return audit !== null && audit.pending !== true && audit.check !== false && audit.affected > 0;
+    return audit !== null && audit.scanning !== true && audit.check !== false && audit.affected > 0;
+  }
+
+  function auditScanning(audit) {
+    return audit !== null && audit.scanning === true;
+  }
+
+  // The result is told once per browser session, and the fact that it was told
+  // is remembered in sessionStorage rather than on the host — a plugin whose one
+  // job here is telling the user something should not grow a state file and a
+  // write route to remember that the telling happened.
+  const CHECK_TOAST_KEY = "dsh-skill-mcp-manager:checking-seen";
+  const RESULT_TOAST_KEY = "dsh-skill-mcp-manager:result-shown";
+
+  function sessionRemember(key) {
+    try {
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      /* a browser that refuses storage just shows the notice again */
+    }
+  }
+
+  function sessionSeen(key) {
+    try {
+      return window.sessionStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  // The settled answer for this session, once and only once: the "no sessions
+  // affected" reassurance must not re-appear on every page load, and neither
+  // must the notice for a problem that was already reported.
+  function auditResultShown(audit) {
+    if (audit === null || audit.done !== true || auditScanning(audit)) return false;
+    return !sessionSeen(RESULT_TOAST_KEY);
   }
 
   // Settings-page banner: the full explanation and the report to hand to an AI.
-  // It carries no close control — it disappears when the host retires the check,
-  // which happens as soon as a scan finds nothing left to report.
+  // It only appears when there is something to report — the all-clear lives in
+  // the toast. It carries no close control; it disappears when the host retires
+  // the check, which happens as soon as a scan finds nothing left to report.
   function LegacySessionBanner() {
     const audit = useLegacyAudit();
     if (!legacySessionsOpen(audit)) return null;
@@ -143,25 +178,54 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     );
   }
 
-  // Frame-wide notice: re-appears on every start while the check is set. Its
-  // close only hides it for this session — no state is written, so a stray click
-  // costs nothing.
+  // One toast per state. While the check runs it says so and asks for patience;
+  // when the answer lands it replaces that with the result — a problem to hand
+  // to an AI, or an all-clear. Closing the wait notice does not stop the check,
+  // so the result still gets its turn.
   function LegacySessionOverlay() {
     const audit = useLegacyAudit();
-    const [hidden, setHidden] = useState(false);
-    if (hidden || !legacySessionsOpen(audit)) return null;
-    return h("div", { className: "smx-toast", role: "status" },
-      h("div", { className: "smx-toast__main" },
-        h("div", { className: "smx-toast__title" }, `因 DSH 版本升级，有 ${audit.affected} 个历史会话无法查看`),
-        h("div", { className: "smx-toast__text" }, "详情见「设置 → 能力库」，内含一次性修复指引。"),
-      ),
-      h("button", {
-        type: "button",
-        className: "smx-toast__close",
-        title: "本次不再显示",
-        onClick: () => setHidden(true),
-      }, "\u00d7"),
-    );
+    const [checkClosed, setCheckClosed] = useState(false);
+    const [resultClosed, setResultClosed] = useState(false);
+    const checking = auditScanning(audit);
+    const shown = auditResultShown(audit);
+    useEffect(() => {
+      if (checking) sessionRemember(CHECK_TOAST_KEY);
+      if (shown) sessionRemember(RESULT_TOAST_KEY);
+    }, [checking, shown]);
+    if (checking && !checkClosed && !sessionSeen(CHECK_TOAST_KEY)) {
+      return h("div", { className: "smx-toast smx-toast--checking", role: "status" },
+        h("div", { className: "smx-toast__main" },
+          h("div", { className: "smx-toast__title" }, "因 DSH 版本升级，历史会话可能无法打开，能力库正在检查"),
+          h("div", { className: "smx-toast__text" }, "若历史会话较多，可能需要一些时间，请耐心等待。本检查是一次性临时动作，修复后不会再次出现。"),
+        ),
+        h("button", {
+          type: "button",
+          className: "smx-toast__close",
+          title: "本次不再显示",
+          onClick: () => setCheckClosed(true),
+        }, "\u00d7"),
+      );
+    }
+    if (shown && !resultClosed) {
+      const affected = audit.affected;
+      return h("div", { className: "smx-toast" + (affected > 0 ? " smx-toast--alert" : " smx-toast--ok"), role: "status" },
+        h("div", { className: "smx-toast__main" },
+          h("div", { className: "smx-toast__title" }, affected > 0
+            ? `因 DSH 版本升级，有 ${affected} 个历史会话无法查看`
+            : "没有会话受影响，请放心使用"),
+          h("div", { className: "smx-toast__text" }, affected > 0
+            ? "把报错交给 AI，让它去修；详情见「设置 → 能力库」。"
+            : "历史会话检查已完成，以后不会再检查。"),
+        ),
+        h("button", {
+          type: "button",
+          className: "smx-toast__close",
+          title: affected > 0 ? "本次不再显示" : "知道了",
+          onClick: () => setResultClosed(true),
+        }, "\u00d7"),
+      );
+    }
+    return null;
   }
 
   function kv(key, value) {
@@ -581,6 +645,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     // The shell overlay layer is a pointer-events:none frame-sized layer whose
     // direct children stay interactive, so the toast sizes and anchors itself.
     ".smx-toast { position:absolute; right:16px; bottom:16px; display:flex; align-items:flex-start; gap:10px; max-width:360px; padding:10px 12px; border-radius:10px; border:1px solid var(--dsw-alias-state-error-primary); background:var(--dsw-alias-bg-layer-1); box-shadow:0 8px 28px rgba(0,0,0,.18); pointer-events:auto; }",
+    ".smx-toast--checking { border-color:var(--dsw-alias-border-l2); }",
+    ".smx-toast--ok { border-color:var(--dsw-alias-state-success-primary); }",
     ".smx-toast__main { min-width:0; }",
     ".smx-toast__title { font-size:13px; font-weight:600; color:var(--dsw-alias-label-primary); }",
     ".smx-toast__text { margin-top:4px; font-size:12px; color:var(--dsw-alias-label-secondary); }",

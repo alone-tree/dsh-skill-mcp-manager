@@ -216,19 +216,68 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   }
   if (existsSync(recordPath)) failed.push("the startup path scheduled a scan; it must be request-triggered only");
 
-  // The trigger itself still works, and only on request.
-  const { createAuditRunner } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/session-audit.js").href);
+  // The trigger itself still works, and only on request. The runner must also
+  // report whether a scan is really in flight: the UI shows a wait notice for
+  // that state and must never show one for a check that is already settled, or a
+  // machine that will never scan again would wait forever.
+  const { createAuditRunner, readAuditRecord: readRecord } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/session-audit.js").href);
   const runner = createAuditRunner(startupData, join(startupHome, "sessions"), { info() {}, warn() {} });
-  await runner.kick();
+  if (runner.running()) failed.push("a runner must not report a scan before anything asked for one");
+  const started = runner.kick();
+  if (started?.started !== true) failed.push(`kick() must report that it started work, got ${JSON.stringify(started)}`);
+  if (!runner.running()) failed.push("kick() must report a scan in flight until the answer lands");
+  await runner.wait();
+  if (runner.running()) failed.push("a settled scan must not stay in flight");
   if (!existsSync(recordPath)) {
     failed.push("kicking the runner did not produce a record");
   } else {
     const record = JSON.parse(await readFile(recordPath, "utf8"));
     if (record.affected !== 1 || record.check !== true) failed.push(`request-triggered audit recorded ${JSON.stringify(record)}`);
   }
+
+  // A retired check does no work at all — that is the state the UI reports as
+  // settled-and-nothing-to-say, which is why "no record at all" has to stay
+  // distinguishable from "still scanning".
+  const retiredData = join(tmp, "retired-data");
+  await mkdir(retiredData, { recursive: true });
+  await writeFile(join(retiredData, AUDIT_FILE), JSON.stringify({ schema: 2, check: false, checkedAt: "2026-09-14T00:00:00.000Z", scanned: 0, affected: 0, samples: [] }), "utf8");
+  const retired = createAuditRunner(retiredData, join(startupHome, "sessions"), { info() {}, warn() {} });
+  retired.kick();
+  await retired.wait();
+  if (retired.running()) failed.push("a retired check must not report work in flight");
+  const untouched = await readRecord(retiredData);
+  if (untouched?.check !== false || untouched?.checkedAt !== "2026-09-14T00:00:00.000Z") {
+    failed.push(`a retired check must not rewrite its record, got ${JSON.stringify(untouched)}`);
+  }
 }
 
-// ── 9) a schema-1 record is migrated, never discarded ──────────────────────
+// ── 9) the notice contract ─────────────────────────────────────────────────
+// The client bundle cannot be rendered here, so this pins the contract it has
+// with the host and the one behaviour that must not regress: the "no sessions
+// affected" reassurance is told once per browser session, never on every load.
+{
+  const source = await readFile("D:/Github/dsh-skill-mcp-manager/client/client.js", "utf8");
+  const must = [
+    ["the running state", /data\.scanning === true/],
+    ["the settled state", /audit\.done !== true/],
+    ["the wait notice", /能力库正在检查/],
+    ["the wait notice dismiss control", /setCheckClosed\(true\)/],
+    ["the problem result", /有 \$\{affected\} 个历史会话无法查看/],
+    ["the all-clear result", /没有会话受影响，请放心使用/],
+    ["told-once bookkeeping", /dsh-skill-mcp-manager:result-shown/],
+  ];
+  for (const [what, pattern] of must) {
+    if (!pattern.test(source)) failed.push(`client.js no longer carries ${what}`);
+  }
+  if (!source.includes("本次不再显示") || !source.includes("知道了")) {
+    failed.push("a host change replaced the close control, but the copy was not updated with it");
+  }
+  if (/\bpending\b/.test(source)) {
+    failed.push("client.js still relies on `pending`; the host reports `scanning` and `done` now");
+  }
+}
+
+// ── 10) a schema-1 record is migrated, never discarded ─────────────────────
 // Discarding it makes the next run rescan; a scan heavy enough to be killed
 // mid-flight records nothing, so the machine would rescan on every start
 // forever — which is how the 2026-09-14 schema bump became a boot loop.
