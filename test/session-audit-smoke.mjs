@@ -174,11 +174,14 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
 }
 
 // ── 8) the audit must stay OUT of the startup path ─────────────────────────
-// Regression guard for 2026-09-14: awaiting the scan inside apply() held
-// `host-boot` open for 123s, past the desktop host's watchdog, and DSH came up
-// in safe mode. Awaited or not is invisible to every other test, so this one
-// asserts the observable consequence — apply() returns before any record exists,
-// because the scan is only *scheduled* there.
+// Regression guard for 2026-09-14, which broke DSH twice: awaiting the scan
+// inside apply() held `host-boot` open past the desktop host's ~120s watchdog,
+// and a `setTimeout(..., 8000)` still fired inside that same window, because
+// plugin load happens early in boot. Both put the app into safe mode. Whether
+// the scan is scheduled from the startup path is invisible to every other test,
+// so this one watches for the observable consequence: after apply() returns, NO
+// scan may run on its own — not immediately, and not on any timer short enough
+// to have been the old one.
 {
   const startupHome = join(tmp, "startup-home");
   const startupSession = join(startupHome, "sessions", "--proj--", "session-legacy");
@@ -202,20 +205,49 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   };
   // A real profile name, so the `__test__` skip does not hide the audit.
   await apply(ctx, { dataDir: startupData, profile: "startup-smoke", importNativeMcp: false });
-  if (existsSync(join(startupData, AUDIT_FILE))) {
-    failed.push("apply() must return before the audit runs; a record already exists");
-  }
-  // ...and it must still run, just later.
-  const deadline = Date.now() + 15000;
-  while (!existsSync(join(startupData, AUDIT_FILE)) && Date.now() < deadline) {
+
+  const recordPath = join(startupData, AUDIT_FILE);
+  if (existsSync(recordPath)) failed.push("apply() ran the audit synchronously");
+  // Watch past the old 8s delay: the startup path must schedule nothing at all.
+  const quietUntil = Date.now() + 10000;
+  while (Date.now() < quietUntil) {
+    if (existsSync(recordPath)) break;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  if (!existsSync(join(startupData, AUDIT_FILE))) {
-    failed.push("the deferred audit never ran");
+  if (existsSync(recordPath)) failed.push("the startup path scheduled a scan; it must be request-triggered only");
+
+  // The trigger itself still works, and only on request.
+  const { createAuditRunner } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/session-audit.js").href);
+  const runner = createAuditRunner(startupData, join(startupHome, "sessions"), { info() {}, warn() {} });
+  await runner.kick();
+  if (!existsSync(recordPath)) {
+    failed.push("kicking the runner did not produce a record");
   } else {
-    const record = JSON.parse(await readFile(join(startupData, AUDIT_FILE), "utf8"));
-    if (record.affected !== 1 || record.check !== true) failed.push(`deferred audit recorded ${JSON.stringify(record)}`);
+    const record = JSON.parse(await readFile(recordPath, "utf8"));
+    if (record.affected !== 1 || record.check !== true) failed.push(`request-triggered audit recorded ${JSON.stringify(record)}`);
   }
+}
+
+// ── 9) a schema-1 record is migrated, never discarded ──────────────────────
+// Discarding it makes the next run rescan; a scan heavy enough to be killed
+// mid-flight records nothing, so the machine would rescan on every start
+// forever — which is how the 2026-09-14 schema bump became a boot loop.
+{
+  const legacyData = join(tmp, "legacy-data");
+  await mkdir(legacyData, { recursive: true });
+  const legacyPath = join(legacyData, AUDIT_FILE);
+  const base = { schema: 1, checkedAt: "2026-09-11T09:22:45.388Z", scanned: 577, affected: 3, samples: [] };
+
+  await writeFile(legacyPath, JSON.stringify({ ...base, dismissedAt: "2026-09-11T09:31:41.469Z" }), "utf8");
+  const dismissed = await readAuditRecord(legacyData);
+  if (dismissed?.check !== false) failed.push(`a dismissed schema-1 record must migrate to check:false, got ${JSON.stringify(dismissed)}`);
+
+  await writeFile(legacyPath, JSON.stringify({ ...base, dismissedAt: null }), "utf8");
+  const open = await readAuditRecord(legacyData);
+  if (open?.check !== true) failed.push(`an undismissed schema-1 record must migrate to check:true, got ${JSON.stringify(open)}`);
+
+  await writeFile(legacyPath, "not json", "utf8");
+  if ((await readAuditRecord(legacyData)) !== null) failed.push("an unreadable record must read as absent");
 }
 
 await rm(tmp, { recursive: true, force: true });
