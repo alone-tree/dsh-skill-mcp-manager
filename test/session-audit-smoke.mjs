@@ -261,16 +261,25 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
     ["the running state", /data\.scanning === true/],
     ["the settled state", /audit\.done !== true/],
     ["the wait notice", /能力库正在检查/],
-    ["the wait notice dismiss control", /setCheckClosed\(true\)/],
+    ["the wait notice bookkeeping", /dsh-skill-mcp-manager:checking-seen/],
     ["the problem result", /有 \$\{affected\} 个历史会话无法查看/],
     ["the all-clear result", /没有会话受影响，请放心使用/],
-    ["told-once bookkeeping", /dsh-skill-mcp-manager:result-shown/],
+    ["the result bookkeeping", /dsh-skill-mcp-manager:result-shown/],
+    // The wait notice and the result toast each need their own key. Sharing one
+    // is exactly the bug that hid the result on-machine: dismissing the wait
+    // notice counted as having told the result.
+    ["the banner's own bookkeeping", /dsh-skill-mcp-manager:banner-dismissed/],
   ];
   for (const [what, pattern] of must) {
     if (!pattern.test(source)) failed.push(`client.js no longer carries ${what}`);
   }
   if (!source.includes("本次不再显示") || !source.includes("知道了")) {
     failed.push("a host change replaced the close control, but the copy was not updated with it");
+  }
+  // The banner must key off the host's state, never off the toast's "told"
+  // marker — that coupling is what silenced both notices.
+  if (!/function bannerAvailable[\s\S]{0,200}legacySessionsOpen\(audit\)/.test(source)) {
+    failed.push("the settings banner must key off legacySessionsOpen, not off the toast's told-once marker");
   }
   if (/\bpending\b/.test(source)) {
     failed.push("client.js still relies on `pending`; the host reports `scanning` and `done` now");

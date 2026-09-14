@@ -124,8 +124,14 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   // is remembered in sessionStorage rather than on the host — a plugin whose one
   // job here is telling the user something should not grow a state file and a
   // write route to remember that the telling happened.
+  //
+  // The wait notice and the result toast need separate keys, because they are
+  // separate conditions rather than one shared "already told" flag: they used to
+  // share one, and closing the wait notice then counted as having told the
+  // result, so the result was never shown at all (found on-machine 2026-09-14).
   const CHECK_TOAST_KEY = "dsh-skill-mcp-manager:checking-seen";
   const RESULT_TOAST_KEY = "dsh-skill-mcp-manager:result-shown";
+  const BANNER_KEY = "dsh-skill-mcp-manager:banner-dismissed";
 
   function sessionRemember(key) {
     try {
@@ -143,22 +149,32 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     }
   }
 
-  // The settled answer for this session, once and only once: the "no sessions
-  // affected" reassurance must not re-appear on every page load, and neither
-  // must the notice for a problem that was already reported.
+  // The settled answer, told once for this session. The banner does not use it:
+  // while the check is open and something is affected it stays on screen.
   function auditResultShown(audit) {
     if (audit === null || audit.done !== true || auditScanning(audit)) return false;
     return !sessionSeen(RESULT_TOAST_KEY);
   }
 
+  // The banner is dismissed for the session, and — the mistake above — that must
+  // not read as the result having been told.
+  function bannerAvailable(audit) {
+    return !sessionSeen(BANNER_KEY) && legacySessionsOpen(audit);
+  }
+
   // Settings-page banner: the full explanation and the report to hand to an AI.
-  // It only appears when there is something to report — the all-clear lives in
-  // the toast. It carries no close control; it disappears when the host retires
-  // the check, which happens as soon as a scan finds nothing left to report.
+  // It appears only when there is something to report — the all-clear lives in
+  // the toast — and it disappears when the host retires the check. Its close is
+  // remembered for the browser session only, and is deliberately a different
+  // thing from the result toast having been told.
   function LegacySessionBanner() {
     const audit = useLegacyAudit();
-    if (!legacySessionsOpen(audit)) return null;
-    return h(Notice, { kind: "error" },
+    const [closed, setClosed] = useState(false);
+    if (closed || !bannerAvailable(audit)) return null;
+    return h(Notice, { kind: "error", onDismiss: () => {
+      sessionRemember(BANNER_KEY);
+      setClosed(true);
+    } },
       h("span", { className: "smx-legacy" },
         h("span", { className: "smx-legacy__title" }, `因 DSH 版本升级，有 ${audit.affected} 个历史会话无法查看`),
         h("span", null,
@@ -182,17 +198,18 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   // when the answer lands it replaces that with the result — a problem to hand
   // to an AI, or an all-clear. Closing the wait notice does not stop the check,
   // so the result still gets its turn.
+  //
+  // Closing goes through sessionStorage for both, so a closed notice stays
+  // closed after a reload — and, because the two keys differ, closing the wait
+  // notice can no longer swallow the result.
   function LegacySessionOverlay() {
     const audit = useLegacyAudit();
-    const [checkClosed, setCheckClosed] = useState(false);
-    const [resultClosed, setResultClosed] = useState(false);
+    // Closing writes to sessionStorage, not to React state, so it has to force a
+    // render to take effect.
+    const [, setTick] = useState(0);
     const checking = auditScanning(audit);
     const shown = auditResultShown(audit);
-    useEffect(() => {
-      if (checking) sessionRemember(CHECK_TOAST_KEY);
-      if (shown) sessionRemember(RESULT_TOAST_KEY);
-    }, [checking, shown]);
-    if (checking && !checkClosed && !sessionSeen(CHECK_TOAST_KEY)) {
+    if (checking && !sessionSeen(CHECK_TOAST_KEY)) {
       return h("div", { className: "smx-toast smx-toast--checking", role: "status" },
         h("div", { className: "smx-toast__main" },
           h("div", { className: "smx-toast__title" }, "因 DSH 版本升级，历史会话可能无法打开，能力库正在检查"),
@@ -202,11 +219,14 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           type: "button",
           className: "smx-toast__close",
           title: "本次不再显示",
-          onClick: () => setCheckClosed(true),
+          onClick: () => {
+            sessionRemember(CHECK_TOAST_KEY);
+            setTick((value) => value + 1);
+          },
         }, "\u00d7"),
       );
     }
-    if (shown && !resultClosed) {
+    if (shown) {
       const affected = audit.affected;
       return h("div", { className: "smx-toast" + (affected > 0 ? " smx-toast--alert" : " smx-toast--ok"), role: "status" },
         h("div", { className: "smx-toast__main" },
@@ -221,7 +241,10 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           type: "button",
           className: "smx-toast__close",
           title: affected > 0 ? "本次不再显示" : "知道了",
-          onClick: () => setResultClosed(true),
+          onClick: () => {
+            sessionRemember(RESULT_TOAST_KEY);
+            setTick((value) => value + 1);
+          },
         }, "\u00d7"),
       );
     }
