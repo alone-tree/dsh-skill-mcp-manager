@@ -117,9 +117,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     return audit !== null && audit.pending !== true && audit.check !== false && audit.affected > 0;
   }
 
-  // Settings-page banner: the full explanation and the repair link. It carries
-  // no close control — it disappears when the host retires the check, which
-  // happens as soon as a scan finds nothing left to report.
+  // Settings-page banner: the full explanation and the report to hand to an AI.
+  // It carries no close control — it disappears when the host retires the check,
+  // which happens as soon as a scan finds nothing left to report.
   function LegacySessionBanner() {
     const audit = useLegacyAudit();
     if (!legacySessionsOpen(audit)) return null;
@@ -129,9 +129,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         h("span", null,
           "DSH 升级后调整了 MCP 注入消息的格式规范，旧会话的 MCP 注入消息不再被支持，打开时会显示",
           h("code", { className: "smx-legacy__code" }, "历史加载失败：failed to observe session … cannot safely transform unclassified message source"),
-          "。请按本项目 issue 的",
-          h("a", { className: "smx-legacy__link", href: REPAIR_GUIDE_URL, target: "_blank", rel: "noreferrer" }, "一次性修复指引"),
-          "完成修复（脚本会先备份，验收通过后再删除备份）。",
+          "。把上面这段报错交给 AI，让它去修；插件的提示里不含修复操作，详情见",
+          h("a", { className: "smx-legacy__link", href: REPAIR_GUIDE_URL, target: "_blank", rel: "noreferrer" }, "本项目 issue"),
         ),
         h("span", { className: "smx-legacy__note" },
           "修好后不需要手动关闭：下次启动扫描到 0 会自动停止。若你决定不修复这些会话，把 ",

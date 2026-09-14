@@ -17,7 +17,6 @@ lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvo
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
 lib/session-audit.js 历史会话审核（一次性，只读）：切帧 + 逐帧解码检出旧版 source，唯一写入是插件自己的 session-audit.json
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
-tools/repair-legacy-sessions.mjs 一次性修复脚本（逐帧重压 + 备份 + 回读复核，默认试运行）；须自包含，因为修复指引 issue 内嵌了它的全文
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
@@ -103,7 +102,6 @@ node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进�
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
-node test/repair-tool-smoke.mjs # 一次性修复脚本：三种 source 形状、跨帧中止、幂等、备份与清理
 
 # 装进 desktop profile（本机已用 link:，改源码后重启 DSH 即生效，不必重装）
 cd ~/.dsh/profiles/desktop
