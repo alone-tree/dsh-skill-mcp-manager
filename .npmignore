@@ -1,0 +1,8 @@
+# 刻意不随 npm 包发布的东西。
+#
+# tools/repair-legacy-sessions.mjs 是历史会话的一次性修复脚本，只从 GitHub 获取：
+# 仓库里放一份、issue 指向它，是为了保证"改哪几个字节"只有一个来源；装插件的人
+# 不该顺带拿到它，也不该看到仓库里还有这么个东西。
+#
+# 说明与用法在 issue #2：https://github.com/alone-tree/dsh-skill-mcp-manager/issues/2
+tools/

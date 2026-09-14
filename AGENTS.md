@@ -17,6 +17,7 @@ lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvo
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
 lib/session-audit.js 历史会话审核（一次性，只读）：切帧 + 逐帧解码检出旧版 source，唯一写入是插件自己的 session-audit.json
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
+tools/repair-legacy-sessions.mjs 历史会话的一次性修复脚本：仓库里只此一份，issue #2 指向它；**不随 npm 包发布**（.npmignore 排除），只能从 GitHub 取
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
