@@ -131,7 +131,6 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   // result, so the result was never shown at all (found on-machine 2026-09-14).
   const CHECK_TOAST_KEY = "dsh-skill-mcp-manager:checking-seen";
   const RESULT_TOAST_KEY = "dsh-skill-mcp-manager:result-shown";
-  const BANNER_KEY = "dsh-skill-mcp-manager:banner-dismissed";
 
   function sessionRemember(key) {
     try {
@@ -149,30 +148,32 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     }
   }
 
-  // The settled answer, told once for this session. The banner does not use it:
-  // while the check is open and something is affected it stays on screen.
+  // The settled answer of a scan that ran in this process, told once for this
+  // browser session. `checked` is what makes the difference between news and an
+  // old conclusion: a retired check reads its record off disk on every start, and
+  // announcing that as a result is what made "没有会话受影响" re-appear on every
+  // restart (2026-09-14, on-machine). The banner does not use this at all: while
+  // the check is open and something is affected it stays on screen.
   function auditResultShown(audit) {
-    if (audit === null || audit.done !== true || auditScanning(audit)) return false;
+    if (audit === null || audit.done !== true || audit.checked !== true || auditScanning(audit)) return false;
     return !sessionSeen(RESULT_TOAST_KEY);
   }
 
   // The banner is dismissed for the session, and — the mistake above — that must
   // not read as the result having been told.
   function bannerAvailable(audit) {
-    return !sessionSeen(BANNER_KEY) && legacySessionsOpen(audit);
+    return legacySessionsOpen(audit);
   }
 
   // Settings-page banner: the full explanation and the report to hand to an AI.
-  // It appears only when there is something to report — the all-clear lives in
-  // the toast — and it disappears when the host retires the check. Its close is
-  // remembered for the browser session only, and is deliberately a different
-  // thing from the result toast having been told.
+  // Whether it appears is decided by the host state alone — the check is open and
+  // something is affected — so it comes back with the page and leaves only when
+  // the problem is dealt with. Its close hides it just for this mount.
   function LegacySessionBanner() {
     const audit = useLegacyAudit();
     const [closed, setClosed] = useState(false);
     if (closed || !bannerAvailable(audit)) return null;
     return h(Notice, { kind: "error", onDismiss: () => {
-      sessionRemember(BANNER_KEY);
       setClosed(true);
     } },
       h("span", { className: "smx-legacy" },

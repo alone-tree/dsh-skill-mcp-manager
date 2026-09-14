@@ -119,16 +119,19 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   if ((await readAuditRecord(dataDir)) !== null) failed.push("no record should exist before the first run");
 
   const first = await runAuditIfNeeded(dataDir, root, logger);
-  if (first.affected !== 3 || first.scanned !== 5) failed.push(`first run recorded ${JSON.stringify(first)}`);
-  if (first.check !== true) failed.push("an affected result must keep the check flag set");
+  if (first.record.affected !== 3 || first.record.scanned !== 5) failed.push(`first run recorded ${JSON.stringify(first)}`);
+  if (first.record.check !== true) failed.push("an affected result must keep the check flag set");
+  // The caller has to be able to tell "we just produced this answer" from "we
+  // read it off disk" — the UI announces only the former.
+  if (first.scanned !== true) failed.push("a run that scanned must say so");
   if (!existsSync(join(dataDir, AUDIT_FILE))) failed.push("the audit record was not written");
 
   // Fix one of the three: the flag stays set and the next start rescans, so the
   // count stays honest while the problem is real.
   await rm(fileA, { force: true });
   const second = await runAuditIfNeeded(dataDir, root, logger);
-  if (second.affected !== 2) failed.push(`a second start must rescan: affected=${second.affected}`);
-  if (second.check !== true) failed.push("still affected, so the check flag must stay set");
+  if (second.record.affected !== 2) failed.push(`a second start must rescan: affected=${second.record.affected}`);
+  if (second.record.check !== true) failed.push("still affected, so the check flag must stay set");
   if (logged.length !== 2) failed.push(`expected two audit log lines, got ${logged.length}`);
 }
 
@@ -139,8 +142,9 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   const logged = [];
   const logger = { info: (line) => logged.push(line), warn() {} };
   const clean = await runAuditIfNeeded(dataDir, root, logger);
-  if (clean.affected !== 0) failed.push(`expected a clean scan, got ${JSON.stringify(clean)}`);
-  if (clean.check !== false) failed.push("a clean scan must retire the check flag");
+  if (clean.record.affected !== 0) failed.push(`expected a clean scan, got ${JSON.stringify(clean)}`);
+  if (clean.record.check !== false) failed.push("a clean scan must retire the check flag");
+  if (clean.scanned !== true) failed.push("the retiring run did scan, so it must say so");
   const stored = JSON.parse(await readFile(join(dataDir, AUDIT_FILE), "utf8"));
   if (stored.check !== false) failed.push("the retired flag was not persisted");
   if (stored.scanned !== 2) failed.push(`the retired record must keep its result, got scanned=${stored.scanned}`);
@@ -149,7 +153,8 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   // exactly as the retiring run wrote it.
   const before = logged.length;
   const again = await runAuditIfNeeded(dataDir, root, logger);
-  if (again.check !== false) failed.push("a retired check must stay retired");
+  if (again.record.check !== false) failed.push("a retired check must stay retired");
+  if (again.scanned !== false) failed.push("a retired check must not claim it scanned");
   if (logged.length !== before) failed.push(`a retired check must not scan, but logged ${logged.length - before} more line(s)`);
   if (JSON.parse(await readFile(join(dataDir, AUDIT_FILE), "utf8")).checkedAt !== stored.checkedAt) {
     failed.push("a retired check must not rewrite the record");
@@ -162,9 +167,12 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   await mkdir(join(emptyRoot, "proj"), { recursive: true });
   const emptyData = join(tmp, "empty-data");
   const logged = [];
-  const record = await runAuditIfNeeded(emptyData, emptyRoot, { info: (line) => logged.push(line), warn() {} });
-  if (record.scanned !== 0 || record.affected !== 0) failed.push(`empty root must scan nothing, got ${JSON.stringify(record)}`);
-  if (record.check !== false) failed.push("a machine with no legacy logs must retire the check");
+  const outcome = await runAuditIfNeeded(emptyData, emptyRoot, { info: (line) => logged.push(line), warn() {} });
+  if (outcome.record.scanned !== 0 || outcome.record.affected !== 0) failed.push(`empty root must scan nothing, got ${JSON.stringify(outcome)}`);
+  if (outcome.record.check !== false) failed.push("a machine with no legacy logs must retire the check");
+  // It really did look — "nothing found" and "never looked" must not look alike,
+  // because only one of them deserves a report.
+  if (outcome.scanned !== true) failed.push("an empty root is still a scan, and must be reported as one");
 }
 
 // ── 7) a missing sessions root is not fatal ────────────────────────────────
@@ -221,13 +229,20 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   // that state and must never show one for a check that is already settled, or a
   // machine that will never scan again would wait forever.
   const { createAuditRunner, readAuditRecord: readRecord } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/session-audit.js").href);
-  const runner = createAuditRunner(startupData, join(startupHome, "sessions"), { info() {}, warn() {} });
+  let duringScan = null;
+  const runner = createAuditRunner(startupData, join(startupHome, "sessions"), { info() { duringScan = runner.running(); }, warn() {} });
   if (runner.running()) failed.push("a runner must not report a scan before anything asked for one");
+  if (runner.checked()) failed.push("a runner must not report a scan it never ran");
   const started = runner.kick();
   if (started?.started !== true) failed.push(`kick() must report that it started work, got ${JSON.stringify(started)}`);
-  if (!runner.running()) failed.push("kick() must report a scan in flight until the answer lands");
   await runner.wait();
   if (runner.running()) failed.push("a settled scan must not stay in flight");
+  // Sampled from inside the scan: the wait notice exists for the scan, not for
+  // the record read that precedes it — reporting that read as "running" made a
+  // check that never scans flash a progress notice.
+  if (duringScan !== true) failed.push(`a scan in progress must report that it is running, got ${JSON.stringify(duringScan)}`);
+  // It ran here, so the UI is allowed to announce the result.
+  if (!runner.checked()) failed.push("a runner that scanned must report that it did");
   if (!existsSync(recordPath)) {
     failed.push("kicking the runner did not produce a record");
   } else {
@@ -245,6 +260,9 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   retired.kick();
   await retired.wait();
   if (retired.running()) failed.push("a retired check must not report work in flight");
+  // ...and it must not claim it scanned: that claim is what makes the UI report
+  // an old answer as fresh news on every single start.
+  if (retired.checked()) failed.push("a retired check must not report that it scanned");
   const untouched = await readRecord(retiredData);
   if (untouched?.check !== false || untouched?.checkedAt !== "2026-09-14T00:00:00.000Z") {
     failed.push(`a retired check must not rewrite its record, got ${JSON.stringify(untouched)}`);
@@ -253,22 +271,21 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
 
 // ── 9) the notice contract ─────────────────────────────────────────────────
 // The client bundle cannot be rendered here, so this pins the contract it has
-// with the host and the one behaviour that must not regress: the "no sessions
-// affected" reassurance is told once per browser session, never on every load.
+// with the host and the behaviours that must not regress: a result is reported
+// only for a scan that ran in this process, and only once per browser session.
 {
   const source = await readFile("D:/Github/dsh-skill-mcp-manager/client/client.js", "utf8");
   const must = [
     ["the running state", /data\.scanning === true/],
     ["the settled state", /audit\.done !== true/],
+    // Without this the UI treats a record read off disk as fresh news, and
+    // "没有会话受影响" comes back on every restart (2026-09-14, on-machine).
+    ["the ran-here gate", /audit\.checked !== true/],
     ["the wait notice", /能力库正在检查/],
     ["the wait notice bookkeeping", /dsh-skill-mcp-manager:checking-seen/],
     ["the problem result", /有 \$\{affected\} 个历史会话无法查看/],
     ["the all-clear result", /没有会话受影响，请放心使用/],
     ["the result bookkeeping", /dsh-skill-mcp-manager:result-shown/],
-    // The wait notice and the result toast each need their own key. Sharing one
-    // is exactly the bug that hid the result on-machine: dismissing the wait
-    // notice counted as having told the result.
-    ["the banner's own bookkeeping", /dsh-skill-mcp-manager:banner-dismissed/],
   ];
   for (const [what, pattern] of must) {
     if (!pattern.test(source)) failed.push(`client.js no longer carries ${what}`);
@@ -277,9 +294,13 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
     failed.push("a host change replaced the close control, but the copy was not updated with it");
   }
   // The banner must key off the host's state, never off the toast's "told"
-  // marker — that coupling is what silenced both notices.
+  // marker — and nothing of the banner's own may be remembered in the browser,
+  // so it cannot be suppressed across mounts.
   if (!/function bannerAvailable[\s\S]{0,200}legacySessionsOpen\(audit\)/.test(source)) {
     failed.push("the settings banner must key off legacySessionsOpen, not off the toast's told-once marker");
+  }
+  if (/banner-dismissed/.test(source)) {
+    failed.push("the banner's visibility must not be remembered in the browser");
   }
   if (/\bpending\b/.test(source)) {
     failed.push("client.js still relies on `pending`; the host reports `scanning` and `done` now");
