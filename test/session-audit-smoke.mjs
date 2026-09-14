@@ -282,6 +282,7 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
     // "没有会话受影响" comes back on every restart (2026-09-14, on-machine).
     ["the ran-here gate", /audit\.checked !== true/],
     ["the wait notice", /能力库正在检查/],
+    ["the wait notice's side effect warning", /历史会话目录可能暂时无法查看/],
     ["the wait notice bookkeeping", /dsh-skill-mcp-manager:checking-seen/],
     ["the problem result", /有 \$\{affected\} 个历史会话无法查看/],
     ["the all-clear result", /没有会话受影响，请放心使用/],

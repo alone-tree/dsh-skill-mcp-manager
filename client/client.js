@@ -214,7 +214,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
       return h("div", { className: "smx-toast smx-toast--checking", role: "status" },
         h("div", { className: "smx-toast__main" },
           h("div", { className: "smx-toast__title" }, "因 DSH 版本升级，历史会话可能无法打开，能力库正在检查"),
-          h("div", { className: "smx-toast__text" }, "若历史会话较多，可能需要一些时间，请耐心等待。本检查是一次性临时动作，修复后不会再次出现。"),
+          h("div", { className: "smx-toast__text" }, "若历史会话较多，可能需要一些时间，请耐心等待；检查期间历史会话目录可能暂时无法查看。本检查是一次性临时动作，修复后不会再次出现。"),
         ),
         h("button", {
           type: "button",
