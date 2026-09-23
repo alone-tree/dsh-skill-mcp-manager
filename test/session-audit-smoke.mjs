@@ -7,7 +7,6 @@ import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { pathToFileURL } from "node:url";
 import zlib from "node:zlib";
 import {
   collectLegacyCandidates,
@@ -202,7 +201,7 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   // DSH_HOME is read when lib/index.js is evaluated, so set it before importing.
   process.env.DSH_HOME = startupHome;
   const startupData = join(tmp, "startup-data");
-  const { apply } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/index.js").href);
+  const { apply } = await import(new URL("../lib/index.js", import.meta.url).href);
   const ctx = {
     tools: { register: () => () => {} },
     skills: { registerProvider: () => () => {} },
@@ -228,7 +227,7 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
   // report whether a scan is really in flight: the UI shows a wait notice for
   // that state and must never show one for a check that is already settled, or a
   // machine that will never scan again would wait forever.
-  const { createAuditRunner, readAuditRecord: readRecord } = await import(pathToFileURL("D:/Github/dsh-skill-mcp-manager/lib/session-audit.js").href);
+  const { createAuditRunner, readAuditRecord: readRecord } = await import(new URL("../lib/session-audit.js", import.meta.url).href);
   let duringScan = null;
   const runner = createAuditRunner(startupData, join(startupHome, "sessions"), { info() { duringScan = runner.running(); }, warn() {} });
   if (runner.running()) failed.push("a runner must not report a scan before anything asked for one");
@@ -274,7 +273,7 @@ const fileF = await put("proj-c", "session-fff", "session.jsonl", Buffer.from(
 // with the host and the behaviours that must not regress: a result is reported
 // only for a scan that ran in this process, and only once per browser session.
 {
-  const source = await readFile("D:/Github/dsh-skill-mcp-manager/client/client.js", "utf8");
+  const source = await readFile(new URL("../client/client.js", import.meta.url), "utf8");
   const must = [
     ["the running state", /data\.scanning === true/],
     ["the settled state", /audit\.done !== true/],
