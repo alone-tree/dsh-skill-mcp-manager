@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [1.1.6] — 2026-09-23
+
+### Fixed
+
+- **npm 包缺 `lib/session-audit.js`，1.1.5 安装即无法加载（issue #5）**：1.1.5 的 `files` 白名单漏了当版新增的 `lib/session-audit.js`，而 `lib/index.js` 顶层 import 它——所有从 npm 安装的 1.1.5 启动即报 `ERR_MODULE_NOT_FOUND .../lib/session-audit.js`，整棵插件树加载失败（本地 `link:` 安装与仓库内测试都感知不到，文件在源目录里存在）。现把该文件补进 `files`。publish.yml 同步补上发布基线清单里已有、但工作流漏列的 `session-audit-smoke.mjs`。
+
 ## [1.1.5] — 2026-09-14
 
 ### Added
