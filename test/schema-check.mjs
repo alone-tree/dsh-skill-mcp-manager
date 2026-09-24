@@ -2,8 +2,12 @@
 // validation: ctx.tools.register() calls assertSupportedJsonSchema(output.schema),
 // and parameters must be losslessly JSON-serializable (snapshotJsonValue).
 
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { assertSupportedJsonSchema } from "@deepseek-ai/dsh-tools";
 import { apply } from "../lib/index.js";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const defs = [];
 const ctx = {
@@ -30,7 +34,7 @@ const ctx = {
   logger: { warn() {}, error() {}, info() {} },
 };
 
-await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "__test__", importNativeMcp: false });
+await apply(ctx, { dataDir: join(repoRoot, ".test-data"), profile: "__test__", importNativeMcp: false });
 
 let failed = false;
 for (const d of defs) {

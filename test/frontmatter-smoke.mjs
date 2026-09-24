@@ -3,10 +3,11 @@
 // preserves the body, other keys, order, and comments. No live DSH required.
 
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { setDisableModelInvocation } from "../lib/skill.js";
 
-const dir = "D:/Github/dsh-skill-mcp-manager/.test-data/frontmatter";
+const dir = join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data", "frontmatter");
 await rm(dir, { recursive: true, force: true });
 await mkdir(dir, { recursive: true });
 const file = join(dir, "SKILL.md");

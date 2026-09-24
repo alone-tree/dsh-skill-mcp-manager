@@ -559,6 +559,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
           h("div", { className: "smx-row__top" },
             h("span", { className: "smx-row__name" }, entry.name),
             h(Badge, { tone: TIER_TONE[entry.tier] || "muted" }, TIER_LABEL[entry.tier] || entry.tier),
+            entry.connectFailed ? h(Badge, { tone: "muted" }, "连接失败，按按需处理") : null,
             entry.transport ? h("span", { className: "smx-row__meta" }, entry.transport) : null,
             h("span", { className: "smx-row__meta" }, entry.toolCount + " 工具"),
           ),
@@ -607,6 +608,66 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   }
 
   // ── capability section (tabs: 技能 / MCP) ────────────────────────────────
+  const APPROVAL_OPTIONS = [
+    ["follow", "跟随当前对话的 DSH 权限"],
+    ["always-ask", "每次都问"],
+    ["always-allow", "始终放行"],
+  ];
+
+  function PluginSettings() {
+    const [approval, setApproval] = useState("follow");
+    const [hosts, setHosts] = useState("");
+    const [notice, setNotice] = useState("");
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+      getJson("/skill-mcp-manager/settings")
+        .then((data) => {
+          if (typeof data.localCommandApproval === "string") setApproval(data.localCommandApproval);
+          if (Array.isArray(data.lanHostAllowlist)) setHosts(data.lanHostAllowlist.join(", "));
+        })
+        .catch(() => {});
+    }, []);
+
+    async function save() {
+      const lanHostAllowlist = hosts.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+      try {
+        const data = await postJson("/skill-mcp-manager/settings", { localCommandApproval: approval, lanHostAllowlist });
+        if (typeof data.localCommandApproval === "string") setApproval(data.localCommandApproval);
+        setHosts(Array.isArray(data.lanHostAllowlist) ? data.lanHostAllowlist.join(", ") : "");
+        setNotice("已保存");
+        setError("");
+      } catch (err) {
+        setError(errText(err));
+      }
+    }
+
+    return h("div", { className: "smx-setting smx-setting--block" },
+      h("div", { className: "smx-setting__row" },
+        h("label", { className: "smx-setting__label" }, "模型登记本地程序"),
+        h("select", {
+          className: "smx-select",
+          value: approval,
+          onChange: (event) => setApproval(event.target.value),
+        }, APPROVAL_OPTIONS.map((option) => h("option", { key: option[0], value: option[0] }, option[1]))),
+      ),
+      h("div", { className: "smx-setting__row" },
+        h("label", { className: "smx-setting__label" }, "局域网主机名"),
+        h("input", {
+          className: "smx-input smx-input--wide",
+          value: hosts,
+          placeholder: "默认空。只有用电脑名打开时才填写",
+          onChange: (event) => setHosts(event.target.value),
+        }),
+      ),
+      h("div", { className: "smx-setting__save" },
+        error ? h("span", { className: "smx-count" }, error) : null,
+        notice ? h("span", { className: "smx-count" }, notice) : null,
+        h("button", { type: "button", className: "smx-btn", onClick: save }, "保存"),
+      ),
+    );
+  }
+
   function ManagerSection() {
     const [tab, setTab] = useState("skills");
     return h("div", { className: "smx" },
@@ -614,6 +675,7 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         h("h2", { className: "smx-title" }, "能力库 (Capability)"),
         h("div", { className: "smx-subtitle" }, "管理 Agent 的 Skill 与 MCP"),
       ),
+      h(PluginSettings),
       h(LegacySessionBanner),
       h("div", { className: "smx-tabs" },
         h("button", { type: "button", className: cx("smx-tab", tab === "skills" && "is-active"), onClick: () => setTab("skills") }, "技能"),
@@ -630,8 +692,12 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     ".smx-title { margin:0; font-size:15px; font-weight:600; color:var(--dsw-alias-label-primary); }",
     ".smx-head__meta { display:flex; align-items:center; gap:8px; }",
     ".smx-setting { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--dsw-alias-border-l1); border-radius:8px; background:var(--dsw-alias-bg-layer-1); }",
-    ".smx-setting__label { font-size:12px; color:var(--dsw-alias-label-secondary); }",
+    ".smx-setting--block { flex-direction:column; align-items:stretch; gap:10px; }",
+    ".smx-setting__row { display:flex; align-items:center; gap:8px; min-width:0; }",
+    ".smx-setting__save { display:flex; justify-content:flex-end; align-items:center; gap:8px; }",
+    ".smx-setting__label { flex:none; white-space:nowrap; font-size:12px; color:var(--dsw-alias-label-secondary); }",
     ".smx-input { font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); width:72px; }",
+    ".smx-input--wide { width:auto; flex:1; min-width:0; }",
     ".smx-count { font-size:12px; color:var(--dsw-alias-label-secondary); }",
     ".smx-btn { font-size:12px; line-height:1; padding:6px 10px; border-radius:6px; border:1px solid var(--dsw-alias-border-l2); background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); cursor:pointer; }",
     ".smx-btn:hover { border-color:var(--dsw-alias-brand-primary); color:var(--dsw-alias-brand-primary); }",

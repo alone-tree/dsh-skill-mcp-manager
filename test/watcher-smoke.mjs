@@ -2,11 +2,12 @@
 // trigger control.invalidate(), so the provider re-discovers without restart.
 
 import { mkdir, writeFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { registerRecursiveSkillProvider } from "../lib/skill.js";
 
-const base = "D:/Github/dsh-skill-mcp-manager/.test-data/watcher";
-const dataDir = "D:/Github/dsh-skill-mcp-manager/.test-data";
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data");
+const base = join(dataDir, "watcher");
 
 await rm(base, { recursive: true, force: true });
 await mkdir(base, { recursive: true });

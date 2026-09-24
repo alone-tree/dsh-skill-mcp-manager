@@ -3,6 +3,8 @@
 // (trial-connect + listTools), mcp_load (reload + definitions), mcp_call
 // (invoke one tool through the bridge).
 
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { apply } from "../lib/index.js";
 
 const registered = {};
@@ -33,7 +35,7 @@ const ctx = {
 };
 
 await apply(ctx, {
-  dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data/e2e",
+  dataDir: join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data", "e2e"),
   profile: "web",
   trialTimeoutMs: 120000,
   toolCallTimeoutMs: 120000,

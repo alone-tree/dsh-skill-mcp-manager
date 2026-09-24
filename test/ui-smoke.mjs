@@ -4,7 +4,11 @@
 // (2) skill listing marks shipped/read-only skills, and (3) toggle/delete are
 // refused for read-only skills. No live DSH or filesystem writes required.
 
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { apply } from "../lib/index.js";
+
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data");
 
 const tools = [];
 const routes = [];
@@ -101,7 +105,7 @@ const ctx = {
   logger: { warn() {}, error() {}, info() {} },
 };
 
-await apply(ctx, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "__test__", importNativeMcp: false });
+await apply(ctx, { dataDir, profile: "__test__", importNativeMcp: false });
 await new Promise((resolve) => setTimeout(resolve, 100));
 
 function makeReq(method, url, body) {
@@ -224,7 +228,7 @@ for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/togg
     },
     logger: { warn() {}, error() {}, info() {} },
   };
-  await apply(ctx2, { dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data", profile: "__test__", importNativeMcp: false });
+  await apply(ctx2, { dataDir, profile: "__test__", importNativeMcp: false });
   await new Promise((resolve) => setTimeout(resolve, 100));
   const paths = injected.map((route) => route.path);
   console.log("inject-path routes:", paths.join(", "));

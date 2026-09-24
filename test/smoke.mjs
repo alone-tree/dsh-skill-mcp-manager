@@ -2,7 +2,11 @@
 // apply() registers the three model-facing tools and the pre-step listener
 // without throwing. No real MCP server or live DSH is required.
 
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { apply, name, inject } from "../lib/index.js";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const registered = [];
 const listeners = new Map();
@@ -54,7 +58,7 @@ console.log("name:", name);
 console.log("inject:", inject.join(","));
 
 await apply(ctx, {
-  dataDir: "D:/Github/dsh-skill-mcp-manager/.test-data",
+  dataDir: join(repoRoot, ".test-data"),
   profile: "__test__",
   importNativeMcp: false,
   trialTimeoutMs: 3000,

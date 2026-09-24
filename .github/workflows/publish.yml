@@ -28,6 +28,7 @@ jobs:
       - name: Check syntax
         run: |
           node --check lib/index.js
+          node --check lib/child-env.js
           node --check lib/skill.js
           node --check lib/ui.js
           node --check client/client.js
@@ -47,6 +48,7 @@ jobs:
           node test/mcp-call-guard-smoke.mjs
           node test/mcp-load-schema-smoke.mjs
           node test/session-audit-smoke.mjs
+          node test/security-smoke.mjs
 
       - name: Publish
         run: npm publish --provenance --access public

@@ -3,11 +3,12 @@
 // `<dir>/SKILL.md` at any depth (and skip flat `.md` files).
 
 import { mkdir, writeFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { registerRecursiveSkillProvider } from "../lib/skill.js";
 
-const base = "D:/Github/dsh-skill-mcp-manager/.test-data/skills";
-const dataDir = "D:/Github/dsh-skill-mcp-manager/.test-data";
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data");
+const base = join(dataDir, "skills");
 
 await rm(base, { recursive: true, force: true });
 await mkdir(join(base, "tools", "git"), { recursive: true });

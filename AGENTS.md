@@ -13,15 +13,16 @@
 
 ```
 lib/index.js    宿主主模块：MCP 三件套、连接/快照、导入接管、reconcile、预热、catalog 注入、UI RPC handlers
+lib/child-env.js 本地工具的环境：密钥与 DSH_ 不继承，$NAME 整段展开
 lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvocation）
-lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView
+lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView + 浏览器主机名检查
 lib/session-audit.js 历史会话审核（一次性，只读）：切帧 + 逐帧解码检出旧版 source，唯一写入是插件自己的 session-audit.json
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
 tools/repair-legacy-sessions.mjs 历史会话的一次性修复脚本：仓库里只此一份，issue #2 指向它；**不随 npm 包发布**（.npmignore 排除），只能从 GitHub 取
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
-docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图；讨论中专题见 docs/专题/（已归档：按会话隔离MCP实例-2026-08-31-已归档）
+docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图；专题见 docs/专题/（已实现：安全与正确性改动-2026-09-24；已归档：按会话隔离MCP实例-2026-08-31-已归档）
 ```
 
 ## 文档维护
@@ -38,18 +39,18 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **RPC = 同源 HTTP 路由**：Host 用 `ctx.webServer.register({kind:"exact", path, handler})`，Client 用 `fetch("/skill-mcp-manager/...")`。
   - `webServer` 是**惰性注册**的服务：必须用 `ctx.inject(["webServer"], (hostCtx) => ...)` 等待，不能同步 `ctx.get("webServer")`（会取到 undefined，路由不注册 → 浏览器拿到 SPA fallback 而非 JSON）。
   - `webServer.register` 对重复 `(kind, path)` 抛错：**GET 和 POST 不能各注册一条同 path 路由**，要合并成一条、handler 内按 `request.method` 分发（见 `/settings` 的实现）。
-- POST 路由必须校验 `sameOrigin(request)`（Origin 与 Host 一致），`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
+- 浏览器发起的路由（请求带 `Origin`）无论读还是写，都要同源，并且主机名是 localhost、本机名或 IP 字面量；局域网主机名走设置里的允许名单。不带 `Origin` 的 POST 仍只校验 `sameOrigin(request)`。`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
 
 ### 数据
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— MCP 注册表（权威）。
-- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`）。
+- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`、`localCommandApproval`、`lanHostAllowlist`）。后两项只在设置页改，不进安装配置。
 - `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：全部 MCP 行收敛进托管块（`MANAGED_MARKER` 与 `MANAGED_END_MARKER` 之间），由注册表整体重生成，每条目一行 `disabled: true`。
 
 ### 每次启动顺序（lib/index.js 的 apply → startup）
 
 1. `loadRegistry(dataDir)`
-2. 读 settings.json（覆盖 `toolDescriptionMaxLength`）
+2. 读 settings.json（覆盖 `toolDescriptionMaxLength`、`localCommandApproval`、`lanHostAllowlist`）
 3. `reconcile()` —— 吸收 + 托管块整体重生成：扫描**整个补丁文件**的 dsh-mcp-client 行，未认领的按行 id 吸收进注册表；托管块由注册表整体重生成（每条目恰好一行、disabled、重复 id 拒绝写盘），托管块外被认领的原生行从原位置移除
 4. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目一次性试连、抓工具快照 + 服务器元信息后关闭，不留下运行实例
 5. eager 实例改到各会话首次 `agent/pre-step` 时在该会话 `agent.ctx` 上启动
@@ -64,7 +65,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **接管 = 全量合并 + id 主键**：`cordis.patch.yml` 的 MCP 配置全部收敛进托管块，每次启动由注册表整体重生成（一个 MCP 一行、disabled；重复 loader id 拒绝写盘）。吸收按**行 id（systemEntryId）**对账，名字（serverName）不参与——改名、手写新行、serverName 漂移都不会产生重复条目或重复 id。吸收的行保留原始 config（`rawConfig`），`mcp_register` 修改后按字段模型重生成。
 - **管理页 Skill 列表要带 preset scope**：内建 `dsh-skill-filesystem` 挂在 agent preset 层。`ctx.skills.list()` 不传 `scope` 只看全局层（本插件递归 provider）；AI 目录注入传 `scope: agent` 所以能看到 `~/.dsh/skills`。Host UI 用 `ctx.get("agentPresets")?.standingKeyFor()` 作为 scope。
 - **shipped 技能只读**：路径含 `node_modules` 或 `app.asar` 的技能（如 cordis preset 的）只能查看/打开，禁止启停/删除（`isReadonlySkillPath`）。
-- **托管块外零残留**：`reconcile` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 之间的内容；托管块外被注册表认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理），未认领行原样保留，非 MCP 内容 byte-for-byte 保留。夹在中间的非 MCP 行挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份。
+- **托管块外零残留**：`reconcile` 只重写 `MANAGED_MARKER`…`MANAGED_END_MARKER` 之间的内容；托管块外被注册表认领的 dsh-mcp-client 行从原位置移除（空的 `- insert:` 块一并清理），未认领行原样保留，非 MCP 内容 byte-for-byte 保留。夹在中间的非 MCP 行挪到结束标记之后。旧文件只有起始标记时，起始之后能认出的 MCP 当中间、认不出的当后缀，并补上结束标记。写前 `.bak-<ts>` 备份，只留最近 5 份。
 - **注入零双重标准（2026-09-07）**：任何注入到模型的消息，GUI「上下文注入」卡片展开后人类看到的就是模型收到的原文——插件注入**不声明宿主的结构化 form**（缺省/未知 form 由宿主 OpaqueBody 渲染模型正文原文），且 **source 不携带正文之外的冗余数据**（OpaqueBody 的 SourceFields 会显示 source 每个字段，携带 entries 会把同一信息渲染两遍）。source = `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`。
 - **注入 source 只用内核已认识的形状（2026-09-11 事故教训）**：released 迁移边用**封闭集合**审计 message source——v2→v3 的 `SOURCE_KINDS` 只认 15 个内置 kind，v0→v1 的 `pluginSourceValue` 对 `plugin` 源只放行 `{kind, plugin}` + `form`/`sections`/`summary`。自定义 kind 或 `digest` 成员会让**历史日志在下一次格式换代时整体打不开**（本机 552/574 个 v0 会话因此失效；v3 新会话却一切正常，因为 v3 读写不审计 kind）。插件写入会话的消息，只能用内核 `MessageSourceMap` 里已建模的 event type / source kind / content kind。
 - **目录注入按正文判等 + eventAt 倒序**：entries 投影（name/tier/description/notes/启用工具 name+description）唯一决定模型可见正文；该正文已随消息 content 持久化，故不再另存 digest（`plugin` 源也没有放 digest 的位置）。可见性判定用 `session.eventAt` 倒序遍历持久日志、取 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染的正文**逐字比对**（宿主 Session 无 `events` 属性——公开 API 是 `eventAt`/`seq`/`snapshotEvents`，不要读 `session.events`；source 不是本插件归属、或正文缺失/损坏的记录视为「非本插件目录」）。正文变了才重新注入（追加替换，不改历史）；是否已注入看会话 surface 上可见的目录消息（对齐内建 `skill-catalog`），不要用进程内 WeakMap：压缩会把旧目录移出 surface，正文未变也必须重注。测试 mock 必须模拟真机 Session 形状（`seq` + `eventAt` + `surface.nodes`）并回写**完整 message（content + source）**，不要模拟 `session.events`，也不要只回写 source。
@@ -85,6 +86,7 @@ pnpm install --config.auto-install-peers=true
 
 # 语法检查
 node --check lib/index.js
+node --check lib/child-env.js
 node --check lib/skill.js
 node --check lib/ui.js
 node --check client/client.js
@@ -103,6 +105,7 @@ node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进�
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
+node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器主机名、本地命令审批、常驻失败降级、备份保留 5 份
 
 # 装进 desktop profile（本机已用 link:，改源码后重启 DSH 即生效，不必重装）
 cd ~/.dsh/profiles/desktop
