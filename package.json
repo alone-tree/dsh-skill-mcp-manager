@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-mcp-manager",
   "description": "能力库 (Capability) — one-stop visual management of DSH Skills & MCP: on-demand MCP loading, in-session hot reload, and SKILL/MCP descriptions viewable in the plugin.",
-  "version": "1.1.7",
+  "version": "1.2.0",
   "publishConfig": {
     "access": "public"
   },
@@ -32,6 +32,7 @@
     "lib/index.js",
     "lib/child-env.js",
     "lib/mcp-result.js",
+    "lib/stdio-transport.js",
     "lib/skill.js",
     "lib/session-audit.js",
     "lib/ui.js",
@@ -66,6 +67,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "cross-spawn": "^7.0.6",
     "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "zod": "^4.4.3",
+    "zod-to-json-schema": "^3.25.1"
   }
 }

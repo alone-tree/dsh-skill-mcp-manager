@@ -151,7 +151,7 @@ for (const name of ["mcp_register", "mcp_load", "mcp_call"]) {
 for (const name of ["prepare-uninstall", "skills", "mcp"]) {
   if (!commands.some((c) => c.name === name)) failed.push(`missing command ${name}`);
 }
-for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/toggle", "/skill-mcp-manager/skills/delete", "/skill-mcp-manager/mcp", "/skill-mcp-manager/mcp/tool-tier"]) {
+for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/toggle", "/skill-mcp-manager/skills/delete", "/skill-mcp-manager/mcp", "/skill-mcp-manager/mcp/tool-tier", "/skill-mcp-manager/settings"]) {
   if (!routes.some((r) => r.path === path)) failed.push(`missing route ${path}`);
 }
 
@@ -197,6 +197,50 @@ for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/togg
   console.log("delete readonly ->", res.status, JSON.stringify(body));
   if (res.status !== 400 || body.ok !== false || !/read-only/.test(body.error || "")) {
     failed.push("deleteSkill did not refuse a read-only skill");
+  }
+}
+
+// settings: stdioMaxBufferSizeMb round-trip — default null (= SDK default),
+// positive integer set + persisted, invalid values refused, null clears.
+{
+  const settingsRoute = routeByPath("/skill-mcp-manager/settings");
+  if (settingsRoute === undefined) {
+    failed.push("settings route missing for the stdioMaxBufferSizeMb round-trip");
+  } else {
+    // Reset to a known state first (the file persists between runs).
+    await settingsRoute.handler(
+      makeReq("POST", "/skill-mcp-manager/settings", { stdioMaxBufferSizeMb: null }),
+      makeRes(),
+    );
+    const getRes = makeRes();
+    await settingsRoute.handler(makeReq("GET", "/skill-mcp-manager/settings"), getRes);
+    if (getRes.status !== 200 || bodyOf(getRes).stdioMaxBufferSizeMb !== null) {
+      failed.push("stdioMaxBufferSizeMb default should be null");
+    }
+
+    const setRes = makeRes();
+    await settingsRoute.handler(makeReq("POST", "/skill-mcp-manager/settings", { stdioMaxBufferSizeMb: 64 }), setRes);
+    if (setRes.status !== 200 || bodyOf(setRes).stdioMaxBufferSizeMb !== 64) {
+      failed.push("stdioMaxBufferSizeMb set to 64 failed");
+    }
+    const getRes2 = makeRes();
+    await settingsRoute.handler(makeReq("GET", "/skill-mcp-manager/settings"), getRes2);
+    if (bodyOf(getRes2).stdioMaxBufferSizeMb !== 64) failed.push("stdioMaxBufferSizeMb did not persist 64");
+
+    for (const bad of [0, -1, 1.5, "abc"]) {
+      const badRes = makeRes();
+      await settingsRoute.handler(makeReq("POST", "/skill-mcp-manager/settings", { stdioMaxBufferSizeMb: bad }), badRes);
+      if (badRes.status !== 400 || bodyOf(badRes).ok !== false) {
+        failed.push(`stdioMaxBufferSizeMb value ${JSON.stringify(bad)} should be refused with 400`);
+      }
+    }
+
+    // Restore the default so the persisted test data stays clean.
+    await settingsRoute.handler(
+      makeReq("POST", "/skill-mcp-manager/settings", { stdioMaxBufferSizeMb: null }),
+      makeRes(),
+    );
+    console.log("settings: stdioMaxBufferSizeMb round-trip done");
   }
 }
 

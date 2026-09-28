@@ -2,7 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
-## [未发布]
+## [1.2.0] — 2026-09-28
+
+### Added
+
+- **stdio 超限响应优雅拒绝，不再整条连接报废**：MCP 官方 SDK 的 stdio 传输在单条消息超过读缓冲上限（默认 10 MB）时直接报错并关闭连接——一个发大响应的服务器（如把 base64 图片内联进单笔回复的 MCP）会让该连接上所有在途调用一起死成 `-32000 Connection closed`，必须 `mcp_load` 重建。新增 `lib/stdio-transport.js`（`ResilientStdioTransport`，线协议与 SDK 完全一致）：超限消息只保留前 1 KB 用于恢复 JSON-RPC id，其余字节排空到帧换行（内存峰值是上限而非消息大小，字节流保持对齐），然后向协议层喂一条合成的 JSON-RPC 错误响应（`-32603`，`data` 带 `received`/`limit`，文案报出「收到 x MB > 上限 y MB」并提示可在设置调大 `stdioMaxBufferSizeMb` 后重新 `mcp_load`）——恰好发起那次调用拿到结构化报错，连接与子进程存活，其余调用不受影响。通知（无 id）与恢复不出 id 的消息直接丢弃、不合成回复。
+- **新设置 `stdioMaxBufferSizeMb`（管理页 MCP tab）**：stdio 连接的读缓冲上限，单位 MB，正整数，留空 = SDK 默认 10 MB；**不设额外天花板，完全对齐 SDK 语义**（官方 `maxBufferSize` 本就是不设校验的自由数值，PR modelcontextprotocol/typescript-sdk#2239；gRPC 的 int32 上限在单进程 Node 里只是假保护，不采）。改动对之后 `mcp_load` 建立的连接生效。仅作用于 stdio 条目（streamable-http 无此参数）。测试：`test/stdio-transport-smoke.mjs`（流状态机单元节 + 需真实运行时的 e2e 节，沙箱内 spawn EPERM 时自动跳过）、`test/ui-smoke.mjs`（settings 路由 round-trip）。
 
 ### Fixed
 

@@ -372,6 +372,8 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
     const [output, setOutput] = useState("");
     const [toolDescMax, setToolDescMax] = useState(150);
     const [toolDescDraft, setToolDescDraft] = useState("150");
+    const [bufferMb, setBufferMb] = useState(null);
+    const [bufferDraft, setBufferDraft] = useState("");
 
     const refresh = useCallback(async (rv) => {
       setLoading(true);
@@ -396,6 +398,11 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
             setToolDescMax(value);
             setToolDescDraft(String(value));
           }
+          const mb = data.stdioMaxBufferSizeMb;
+          if (typeof mb === "number" && mb > 0) {
+            setBufferMb(mb);
+            setBufferDraft(String(mb));
+          }
         })
         .catch(() => {});
     }, []);
@@ -410,6 +417,26 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         await postJson("/skill-mcp-manager/settings", { toolDescriptionMaxLength: value });
         setToolDescMax(value);
         setNotice("已更新工具描述截断为 " + value);
+      } catch (err) {
+        setError(errText(err));
+      }
+    }
+
+    async function saveBufferMb() {
+      const text = bufferDraft.trim();
+      // Empty clears the override (back to the SDK default of 10 MB).
+      const value = text === "" ? null : Number(text);
+      if (value !== null && (!Number.isInteger(value) || value <= 0)) {
+        setError("stdio 消息上限必须是正整数（MB），留空表示使用 SDK 默认 10 MB");
+        return;
+      }
+      try {
+        await postJson("/skill-mcp-manager/settings", { stdioMaxBufferSizeMb: value });
+        setBufferMb(value);
+        setBufferDraft(value === null ? "" : String(value));
+        setNotice(value === null
+          ? "已恢复 SDK 默认上限 10 MB；新上限对之后 mcp_load 的连接生效"
+          : "已把 stdio 消息上限调到 " + value + " MB；对之后 mcp_load 的连接生效");
       } catch (err) {
         setError(errText(err));
       }
@@ -598,6 +625,20 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
         }),
         h("button", { type: "button", className: "smx-btn", onClick: saveToolDesc }, "保存"),
         h("span", { className: "smx-count" }, "当前 " + toolDescMax),
+      ),
+      h("div", { className: "smx-setting" },
+        h("span", { className: "smx-setting__label" }, "stdio 消息上限（MB）"),
+        h("input", {
+          type: "number",
+          className: "smx-input",
+          value: bufferDraft,
+          min: 1,
+          placeholder: "SDK 默认 10",
+          onChange: (e) => setBufferDraft(e.target.value),
+        }),
+        h("button", { type: "button", className: "smx-btn", onClick: saveBufferMb }, "保存"),
+        h("span", { className: "smx-count" },
+          bufferMb === null ? "当前 SDK 默认 10 MB；超出上限的消息会被丢弃并报错，连接不断开" : "当前 " + bufferMb + " MB"),
       ),
       notice ? h(Notice, { kind: "success", onDismiss: () => setNotice("") }, notice) : null,
       error ? h(Notice, { kind: "error", onDismiss: () => setError("") }, error) : null,

@@ -14,6 +14,7 @@
 ```
 lib/index.js    宿主主模块：MCP 三件套、连接/快照、导入接管、reconcile、预热、catalog 注入、UI RPC handlers
 lib/mcp-result.js MCP 工具结果投影：与 dsh-mcp-client 相同的正文、图片准入和 structuredContent
+lib/stdio-transport.js 自建 stdio 传输层（ResilientStdioTransport）：线协议与 SDK 一致，超限响应合成为 JSON-RPC 错误而不断连
 lib/child-env.js 本地工具的环境：密钥与 DSH_ 不继承，$NAME 整段展开
 lib/skill.js    递归 skill provider + frontmatter 编辑（setDisableModelInvocation）
 lib/ui.js       HTTP 路由 + /skills /mcp 命令 + 跨平台 open/trash + 密钥打码 + entryView + 浏览器主机名检查
@@ -45,13 +46,13 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 ### 数据
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— MCP 注册表（权威）。
-- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`、`localCommandApproval`、`lanHostAllowlist`）。后两项只在设置页改，不进安装配置。
+- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`、`stdioMaxBufferSizeMb`、`localCommandApproval`、`lanHostAllowlist`）。后两项只在设置页改，不进安装配置；`stdioMaxBufferSizeMb` 同样只在设置页改。
 - `~/.dsh/profiles/<profile>/cordis.patch.yml` —— 被 reconcile 的 patch：全部 MCP 行收敛进托管块（`MANAGED_MARKER` 与 `MANAGED_END_MARKER` 之间），由注册表整体重生成，每条目一行 `disabled: true`。
 
 ### 每次启动顺序（lib/index.js 的 apply → startup）
 
 1. `loadRegistry(dataDir)`
-2. 读 settings.json（覆盖 `toolDescriptionMaxLength`、`localCommandApproval`、`lanHostAllowlist`）
+2. 读 settings.json（覆盖 `toolDescriptionMaxLength`、`stdioMaxBufferSizeMb`、`localCommandApproval`、`lanHostAllowlist`）
 3. `reconcile()` —— 吸收 + 托管块整体重生成：扫描**整个补丁文件**的 dsh-mcp-client 行，未认领的按行 id 吸收进注册表；托管块由注册表整体重生成（每条目恰好一行、disabled、重复 id 拒绝写盘），托管块外被认领的原生行从原位置移除
 4. `warmSnapshots()` —— 无缓存或 `metaFetchedAt` 为空的条目一次性试连、抓工具快照 + 服务器元信息后关闭，不留下运行实例
 5. eager 实例改到各会话首次 `agent/pre-step` 时在该会话 `agent.ctx` 上启动
@@ -73,6 +74,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **MCP 单工具禁用 = 黑名单 + 双调用边界**：`entry.disabledTools` 保存原始工具名，新工具默认启用；禁用工具从 eager 注册、目录和 `mcp_load` 隐藏，但安全保证来自 eager `execute` 与 `mcp_call` 在 `tools/call` 前再次拒绝。`mcp_register` 不提供黑名单修改参数，只有管理 UI 可改。已开始的调用不强制中断。
 - **MCP 工具结果与宿主 `dsh-mcp-client` 同一套投影**：eager 和 `mcp_call` 的返回值保留原始 `content` / `structuredContent`；模型正文由 `render` 加 `finalizeContent` 生成。图片只按宿主的格式、模型输入和附件库准入后交出去，文案不另写。`mcp_register` / `mcp_load` 仍只回文本。实现在 `lib/mcp-result.js`。
 - **mcp_call 参数形状守卫 + 错误上下文**：`mcp_call` 入口运行时校验 `tool`（非空字符串）与 `args`（对象或省略），报错附正确形状，**只报错不自动解包**；工具调用失败（协议错误与 `isError` 结果两类）的错误消息统一附加 server/tool 与实参 JSON（协议错误另附 inputSchema，各截断 2000 字符），桥与 eager `execute` 共用此实现。**真机实测（2026-09-07）**：DSH 宿主会对 `required` 违例调用先清洗参数，真实环境下守卫主要走"缺 tool"分支，嵌套形状识别是防御性冗余（mock 直调 handler 可达）；不要假设宿主会替插件做参数校验。
+- **stdio 超限响应优雅拒绝，不自设天花板**：SDK 的 `StdioClientTransport` 在单条消息超过读缓冲上限（默认 10 MiB）时抛错并 close——一个发大响应的服务器让整条连接报废、所有在途调用死成 `-32000 Connection closed`。本插件所有 stdio 连接改用 `lib/stdio-transport.js`（`ResilientStdioTransport`，线协议与 SDK 逐字一致）：超限消息只留前 1 KB 恢复 JSON-RPC id，其余字节计数排空到帧换行（内存峰值是上限而非消息大小，流保持对齐），再向协议层喂一条合成 JSON-RPC 错误响应（`-32603`，`data: {received, limit}`，文案提示可调大 `stdioMaxBufferSizeMb` 后重新 `mcp_load`）——恰好那次调用拿到结构化报错，连接与子进程存活。通知（带 `method`）与 id 恢复失败的消息丢弃不回复。设置 `stdioMaxBufferSizeMb`（settings.json，正整数 MB，null = SDK 默认）**不设天花板——对齐 SDK 官方语义**（官方 `maxBufferSize` 是无校验的自由数值），只在管理页改，仅作用于 stdio 条目，对之后 `mcp_load` 的连接生效。治标定位：服务端仍应做单笔响应总量控制；DSH 原生 `dsh-mcp-client` 通道不经本插件、不受保护。**维护约定（fork 漂移是本方案的主要长期成本）**：升级 `@modelcontextprotocol/sdk` 时须人工 diff 官方 `dist/esm/client/stdio.js` 与本副本——副本只抄 SDK 1.30.0 的 stdio 实现，官方后续修 bug 或改行为不会自动跟过来；契约验证靠 `test/stdio-transport-smoke.mjs` 的 e2e 节（真 SDK Client + 真 spawn 全流程，SDK 侧接口变化会直接红），改传输层后须在真实终端跑一次该节（沙箱内 spawn EPERM 自动跳过，勿把「跳过」当「通过」）。
 
 ## 编码约定
 
@@ -89,6 +91,7 @@ pnpm install --config.auto-install-peers=true
 # 语法检查
 node --check lib/index.js
 node --check lib/mcp-result.js
+node --check lib/stdio-transport.js
 node --check lib/child-env.js
 node --check lib/skill.js
 node --check lib/ui.js
@@ -100,7 +103,7 @@ node test/schema-check.mjs     # 工具 schema 校验
 node test/skill-smoke.mjs      # 递归 provider
 node test/watcher-smoke.mjs    # watcher 热生效
 node test/import-smoke.mjs     # 原生导入 + 接管（隔离 DSH_HOME，勿连真实网络）
-node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径
+node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径 + settings 的 stdioMaxBufferSizeMb round-trip
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
@@ -110,6 +113,7 @@ node test/mcp-result-smoke.mjs # MCP 工具结果投影：文本、图片准入�
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
 node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器主机名、本地命令审批、常驻失败降级、备份保留 5 份
+node test/stdio-transport-smoke.mjs # stdio 超限优雅拒绝：流状态机（无子进程）+ e2e 节需真实运行时（沙箱 spawn EPERM 自动跳过）
 
 # 装进 desktop profile（本机已用 link:，改源码后重启 DSH 即生效，不必重装）
 cd ~/.dsh/profiles/desktop

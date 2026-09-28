@@ -99,7 +99,7 @@ dsh plugin --profile <profile> add dsh-skill-mcp-manager
 打开 **设置 → 能力库**：
 
 - **SKILL tab** —— 所有托管技能（bundle 型 `SKILL.md`）按路径排序：模型可见性开关、系统编辑器打开、跨平台删除。部署自带技能（`node_modules` / `app.asar` 下）为**只读**：仅查看 + 打开。
-- **MCP tab** —— 所有已注册服务器（档位徽标、工具数）：切档位、查详情（命令 / env / headers / 工具）、逐工具“启用/禁用”（黑名单，新工具默认启用）、密钥打码/显示、查看描述、刷新快照、删除条目。刷新快照只试连并更新注册表，不留下运行实例。禁用工具不向 AI 暴露，并在实际调用入口强制拒绝。顶部设置行可调目录的**工具描述截断长度**（默认 150 字符）。
+- **MCP tab** —— 所有已注册服务器（档位徽标、工具数）：切档位、查详情（命令 / env / headers / 工具）、逐工具“启用/禁用”（黑名单，新工具默认启用）、密钥打码/显示、查看描述、刷新快照、删除条目。刷新快照只试连并更新注册表，不留下运行实例。禁用工具不向 AI 暴露，并在实际调用入口强制拒绝。顶部设置行可调目录的**工具描述截断长度**（默认 150 字符）和 **stdio 消息上限**（MB，留空 = SDK 默认 10）：某条响应超过上限时会被丢弃并向 AI 返回带大小数值的报错，连接不断开；若那条响应是合法的大负载（如内联图片的笔记），把上限调大后重新 `mcp_load` 即可。仅对 stdio 条目生效，对之后加载的连接生效。
 
 ### 模型工具面
 
@@ -130,7 +130,7 @@ dsh plugin --profile <profile> add dsh-skill-mcp-manager
 ## 数据
 
 - `~/.dsh/skill-mcp-manager/registry.json` —— 权威 MCP 注册表（version 1，`entries[]`）。
-- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength` 等）。
+- `~/.dsh/skill-mcp-manager/settings.json` —— 插件设置（`customRecursiveDirs`、`toolDescriptionMaxLength`、`stdioMaxBufferSizeMb` 等）。
 - `~/.dsh/skill-mcp-manager/trash.log` —— 删除审计。
 - env 值可为明文或 `$VAR` 进程环境变量引用。
 
