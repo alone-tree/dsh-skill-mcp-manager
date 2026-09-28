@@ -1,13 +1,15 @@
 // mcp-catalog pre-step: inject once while the catalog is on the session
 // surface; re-append after compaction removes it, when the stored text is
 // unreadable, when the source is not this plugin's own, or when the catalog
-// content changes. Identity is the model-facing text itself: the source is the
-// kernel's generic plugin attribution, which the released migration edges audit
-// against a closed set of kinds (a custom kind or an extra `digest` member
-// makes historical logs unloadable). The mock mirrors the real host Session API
-// (seq + eventAt + surface.nodes) and persists whole messages (content +
-// source), so the text-based identity is exercised the way the log stores it.
-// Isolated dataDir, no network, no real profile.
+// content changes. Identity is the model-facing text itself, and the message
+// carries the producer-owned source kind the kernel's own v3→v4 edge derives
+// for an unknown plugin (`plugin:<name>`) — session format v4 refuses the
+// retired bare `kind:"plugin"` + `plugin` pair at write time (2026-09-28),
+// while a custom kind or an extra `digest` member is refused by the released
+// migration edges when a historical log is read. The mock mirrors the real host
+// Session API (seq + eventAt + surface.nodes) and persists whole messages
+// (content + source), so the text-based identity is exercised the way the log
+// stores it. Isolated dataDir, no network, no real profile.
 
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -58,7 +60,7 @@ const ctx = {
 await apply(ctx, { dataDir, profile: "__test__", importNativeMcp: false });
 await new Promise((resolve) => setTimeout(resolve, 50));
 
-const CATALOG_SOURCE = { kind: "plugin", plugin: "dsh-skill-mcp-manager" };
+const CATALOG_SOURCE = { kind: "plugin:dsh-skill-mcp-manager" };
 
 const failed = [];
 const signal = { throwIfAborted() {} };
@@ -94,12 +96,16 @@ function makeSession() {
   };
 }
 
+function isCatalog(message) {
+  return message?.source?.kind === CATALOG_SOURCE.kind;
+}
+
 function catalogCount(messages) {
-  return messages.filter((message) => message?.source?.kind === CATALOG_SOURCE.kind && message?.source?.plugin === CATALOG_SOURCE.plugin).length;
+  return messages.filter(isCatalog).length;
 }
 
 function lastCatalog(messages) {
-  return [...messages].reverse().find((message) => message?.source?.kind === CATALOG_SOURCE.kind && message?.source?.plugin === CATALOG_SOURCE.plugin);
+  return [...messages].reverse().find(isCatalog);
 }
 
 // Persist a returned message the way the host does: the whole message object,
@@ -109,14 +115,17 @@ function persist(session, message) {
 }
 
 // 1) First step on an empty session: inject exactly once. The source must be
-//    the kernel's plugin attribution with nothing else on it — no declared
-//    form (humans expand the card to the model-facing text itself, never a
-//    lossy summary) and no digest (the migration audit refuses that member).
+//    the producer-owned kind and nothing else — not the retired bare
+//    `kind:"plugin"` pair that v4 refuses at write time, no declared form
+//    (humans expand the card to the model-facing text itself, never a lossy
+//    summary) and no digest (the migration audit refuses that member).
 const first = makeSession();
 const firstResult = await preStep({ agent: first.agent, signal }, enter);
 if (catalogCount(firstResult.messages) !== 1) failed.push("first step did not inject mcp-catalog");
 const injected = lastCatalog(firstResult.messages);
 if (JSON.stringify(injected?.source) !== JSON.stringify(CATALOG_SOURCE)) failed.push(`injected source must be exactly ${JSON.stringify(CATALOG_SOURCE)}, got ${JSON.stringify(injected?.source)}`);
+if (injected?.source?.kind === "plugin") failed.push("source kind must not be the bare \"plugin\" v4 refuses at write time");
+if ("plugin" in (injected?.source ?? {})) failed.push("source must not carry the retired plugin member");
 if (injected?.source?.digest !== undefined) failed.push("source must not carry a digest (migration audit refuses it)");
 if ("form" in (injected?.source ?? {})) failed.push("injected catalog must not declare a form (opaque rendering keeps humans at parity)");
 if (injected?.source?.entries !== undefined) failed.push("source must not carry entries (SourceFields would render the same information twice)");
@@ -145,12 +154,14 @@ if (catalogCount(afterShapeless.messages) !== 1) failed.push("a catalog record w
 // 5) A record with the right text but somebody else's source must not count as
 //    this plugin's catalog (a foreign message cannot suppress the injection).
 const foreign = makeSession();
-foreign.append({ type: "user/message", data: { source: { kind: "plugin", plugin: "time-context" }, content: lastCatalog(firstResult.messages).content } });
+foreign.append({ type: "user/message", data: { source: { kind: "skill-catalog" }, content: lastCatalog(firstResult.messages).content } });
 const afterForeign = await preStep({ agent: foreign.agent, signal }, enter);
 if (catalogCount(afterForeign.messages) !== 1) failed.push("a foreign plugin source must not count as this plugin's catalog; expected fresh injection");
 
-// 6) Historical logs repaired to the plugin shape are recognised: their text is
-//    still the catalog, so resuming such a session must not inject a second copy.
+// 6) A catalog written before this change comes back as the same kind (the
+//    kernel's v3→v4 edge rewrites `{kind:"plugin", plugin}` to
+//    `plugin:<plugin>`): its text is still the catalog, so resuming such a
+//    session must not inject a second copy.
 const repaired = makeSession();
 repaired.append({ type: "user/message", data: { source: CATALOG_SOURCE, content: lastCatalog(firstResult.messages).content } });
 const afterRepaired = await preStep({ agent: repaired.agent, signal }, enter);

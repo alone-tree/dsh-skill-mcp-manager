@@ -176,8 +176,10 @@ try {
       blockedError = String(error?.message ?? error);
     }
     if (!/disabled/.test(blockedError)) failed.push(`mcp_call did not reject disabled tool: ${blockedError}`);
-    const allowed = await mcpCall.execute({ name: "demo", tool: "allowed", args: {} }, { signal: new AbortController().signal, agent });
-    if (allowed.text !== "called allowed") failed.push(`enabled bridge call failed: ${allowed.text}`);
+    const allowedArgs = { name: "demo", tool: "allowed", args: {} };
+    const allowed = await mcpCall.execute(allowedArgs, { signal: new AbortController().signal, agent });
+    const allowedText = mcpCall.output.render(allowedArgs, allowed).map((block) => block.text ?? "").join("\n");
+    if (allowedText !== "called allowed") failed.push(`enabled bridge call failed: ${allowedText}`);
   }
 
   const enabledBody = await setTool("blocked", true);

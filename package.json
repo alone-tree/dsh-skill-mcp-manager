@@ -31,6 +31,7 @@
   "files": [
     "lib/index.js",
     "lib/child-env.js",
+    "lib/mcp-result.js",
     "lib/skill.js",
     "lib/session-audit.js",
     "lib/ui.js",

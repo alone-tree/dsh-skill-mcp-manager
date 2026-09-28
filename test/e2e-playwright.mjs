@@ -80,7 +80,11 @@ if (!failed) {
       { name: "playwright", tool: "browser_navigate", args: { url: "https://example.com" } },
       exec,
     );
-    console.log(res.text.slice(0, 1000));
+    const text = registered.mcp_call.output.render(
+      { name: "playwright", tool: "browser_navigate", args: { url: "https://example.com" } },
+      res,
+    ).map((block) => block.text ?? "").join("\n");
+    console.log(text.slice(0, 1000));
   } catch (error) {
     // A browser-not-installed error is still a clean bridge round-trip.
     failed = true;

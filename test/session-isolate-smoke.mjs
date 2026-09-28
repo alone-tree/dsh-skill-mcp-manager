@@ -143,20 +143,25 @@ try {
 
   await mcpLoad.execute({ name: "demo" }, { agent: agentA });
   await mcpLoad.execute({ name: "demo" }, { agent: agentB });
-  const idA = (await mcpCall.execute({ name: "demo", tool: "whoami", args: {} }, { signal: new AbortController().signal, agent: agentA })).text;
-  const idB = (await mcpCall.execute({ name: "demo", tool: "whoami", args: {} }, { signal: new AbortController().signal, agent: agentB })).text;
+  const whoami = { name: "demo", tool: "whoami", args: {} };
+  const callText = async (agent) => {
+    const value = await mcpCall.execute(whoami, { signal: new AbortController().signal, agent });
+    return mcpCall.output.render(whoami, value).map((block) => block.text ?? "").join("\n");
+  };
+  const idA = await callText(agentA);
+  const idB = await callText(agentB);
   if (!idA || !idB) failed.push("whoami returned empty id");
   if (idA === idB) failed.push(`sessions shared one MCP process: ${idA}`);
 
   for (const dispose of agentA.sessionEffects.reverse()) await dispose();
   let afterA = "";
   try {
-    afterA = (await mcpCall.execute({ name: "demo", tool: "whoami", args: {} }, { signal: new AbortController().signal, agent: agentA })).text;
+    afterA = await callText(agentA);
   } catch (error) {
     afterA = String(error?.message ?? error);
   }
   if (!/not loaded/.test(afterA)) failed.push(`disposing A should drop A's instance: ${afterA}`);
-  const stillB = (await mcpCall.execute({ name: "demo", tool: "whoami", args: {} }, { signal: new AbortController().signal, agent: agentB })).text;
+  const stillB = await callText(agentB);
   if (stillB !== idB) failed.push(`disposing A affected B: ${stillB}`);
 
   const loadRoute = routes.find((route) => route.path === "/skill-mcp-manager/mcp/load");
@@ -164,7 +169,7 @@ try {
   await loadRoute.handler(makeReq("/skill-mcp-manager/mcp/load", { name: "demo" }), res);
   const body = res.body ? JSON.parse(res.body) : {};
   if (res.status !== 200 || body.ok !== true) failed.push(`refresh snapshot failed: ${body.error || res.status}`);
-  const stillBAfterRefresh = (await mcpCall.execute({ name: "demo", tool: "whoami", args: {} }, { signal: new AbortController().signal, agent: agentB })).text;
+  const stillBAfterRefresh = await callText(agentB);
   if (stillBAfterRefresh !== idB) failed.push(`snapshot refresh replaced B's instance: ${stillBAfterRefresh}`);
 } finally {
   for (const dispose of effects.reverse()) await dispose();

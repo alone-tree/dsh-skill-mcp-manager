@@ -127,6 +127,10 @@ async function expectError(promise, patterns, label) {
 }
 
 const exec = (agent) => ({ signal: new AbortController().signal, agent });
+
+function modelText(tool, args, value) {
+  return tool.output.render(args, value).map((block) => block.text ?? "").join("\n");
+}
 const failed = [];
 try {
   await apply(ctx, {
@@ -150,13 +154,15 @@ try {
     await mcpLoad.execute({ name: "demo" }, exec(agent));
 
     // 1. well-shaped calls still work
-    const echoed = await mcpCall.execute({ name: "demo", tool: "echo", args: { msg: "hi" } }, exec(agent));
-    if (!echoed.text.includes("called echo") || !echoed.text.includes("hi")) {
-      failed.push(`well-shaped bridge call regressed: ${echoed.text}`);
+    const echoArgs = { name: "demo", tool: "echo", args: { msg: "hi" } };
+    const echoed = modelText(mcpCall, echoArgs, await mcpCall.execute(echoArgs, exec(agent)));
+    if (!echoed.includes("called echo") || !echoed.includes("hi")) {
+      failed.push(`well-shaped bridge call regressed: ${echoed}`);
     }
-    const noargs = await mcpCall.execute({ name: "demo", tool: "noargs" }, exec(agent));
-    if (!noargs.text.includes("called noargs")) {
-      failed.push(`omitted-args bridge call regressed: ${noargs.text}`);
+    const noArgCall = { name: "demo", tool: "noargs" };
+    const noargs = modelText(mcpCall, noArgCall, await mcpCall.execute(noArgCall, exec(agent)));
+    if (!noargs.includes("called noargs")) {
+      failed.push(`omitted-args bridge call regressed: ${noargs}`);
     }
 
     // 2. malformed shapes are rejected with the correct shape, no auto-unwrap
@@ -201,8 +207,9 @@ try {
       "eager error context",
     ));
     const eagerEcho = activeTool("mcp__eagerdemo__echo");
-    const ok = await eagerEcho.execute({ msg: "hey" }, exec(agent));
-    if (!ok.text.includes("called echo")) failed.push(`eager echo regressed: ${ok.text}`);
+    const echoArgs = { msg: "hey" };
+    const ok = modelText(eagerEcho, echoArgs, await eagerEcho.execute(echoArgs, exec(agent)));
+    if (!ok.includes("called echo")) failed.push(`eager echo regressed: ${ok}`);
 
     // 3b'. eager path: isError tool results carry the same context
     const eagerSoftfail = activeTool("mcp__eagerdemo__softfail");

@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [未发布]
+
+### Fixed
+
+- **注入 source 改用 v4 的生产者自有 kind，每一轮对话不再整轮失败**：会话格式 v4 的**写入端**废弃了裸 `kind:"plugin"` + `plugin` 组合——`dsh-session-format-v3-to-v4` 的 `source()` 只收非空且不等于 `"plugin"` 的 kind，命中就在 `encodeEvent` 落盘时抛 `format v4 message requires a producer-owned source kind`（写入链没有再包一层 try/catch，错误直接上抛成 `agent turn failed`）。本插件每轮 pre-step 注入的目录消息用的正是这个形状，因此只要 registry 里有非 disabled 条目，**每一轮对话都会在落盘阶段失败**（DSH Desktop 2.0.15 / 内核 `@deepseek-ai/dsh-* 0.1.7-rc.2`，2026-09-28 实测当日 42 次报错，手动会话 turn 1 step 1 与定时任务 turn 1 step 0 同样中招；同一轮次里另一个元凶是 `@opendsh/dsh-plugin-scheduled-tasks`，不属本仓库）。现在 source 是 `{kind:"plugin:dsh-skill-mcp-manager"}`：它正是内核 v3→v4 边对未登记第三方插件名的回退产物（`producerKind()` → `` `plugin:${plugin}` ``；`RENAMED_PRODUCERS` / `RELEASED_SAME_NAME_PRODUCERS` 里都没有本插件），所以旧日志迁移后与新写入逐字同形。`visibleCatalogText` / `pendingCatalogText` 的判据同步改为**只比 `source.kind`**（不再读 `source.plugin`）——否则旧会话里已被迁移的目录消息认不出来，会退化成每轮重复注入。GUI 上唯一可见变化：上下文注入卡片的来源标签由 `plugin` 变成 `plugin:dsh-skill-mcp-manager`，SourceFields 里那行 `plugin = dsh-skill-mcp-manager` 随之消失（`kind` 本身照旧永远隐藏）。测试：`test/catalog-smoke.mjs` 增两条回归守卫（kind 不得是裸 `"plugin"`、source 不得带 `plugin` 成员）。
+
 ## [1.1.7] — 2026-09-24
 
 ### Security
@@ -13,6 +19,7 @@ All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are docume
 
 ### Fixed
 
+- **MCP 工具结果不再把图片换成占位文本**。eager 和 `mcp_call` 改用宿主 `dsh-mcp-client` 的同一套投影：返回值保留原始 `content` 和 `structuredContent`；模型正文只放文本、`resource_link` 的名字和 URI，音频和内嵌 resource 用宿主那句说明。图片只在格式、当前模型的图像输入和附件库都通过时，按原位置交给模型；否则说明原因，原始数据留在返回值里。`isError` 里的图片不送进模型。`mcp_register` / `mcp_load` 仍只回文本。测试：`test/mcp-result-smoke.mjs`。
 - **`/mcp prepare-uninstall` 会真正把托管条目交还原生客户端**，效果与 `/prepare-uninstall` 相同。`/mcp` 后面写了认不出的话会提示用法，不再静默列出服务器。不带参数的 `/mcp` 仍是列出服务器。
 - **连不上的常驻工具不再每句话都重试**。配置没变且本会话已经挂好时，这一轮不再拆掉重挂。这一轮没连上就记为连接失败，档位仍是常驻，管理页标明按按需处理，后续回合不再干等。刷新快照或在对话里加载成功后恢复自动挂载。人改了命令、参数、环境或工作目录后会清掉失败状态并马上再试。只影响常驻。
 - **系统配置备份只留最近 5 份**。

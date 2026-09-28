@@ -222,6 +222,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 6. **错误规范化**：`{ ok, data | error }`；isError → 结构化错误；超时/断连 → 明确状态（自动重连兜底）。
 7. **参数形状守卫（1.1.3 落地）**：`mcp_call` 入口运行时校验 `tool` 为非空字符串、`args` 为对象（可省略表示无参），报错附正确形状 `{"name","tool","args"}`。**不做自动解包**——只报错不纠正。**真机实测（2026-09-07）**：当前 DSH 宿主会对未通过工具 schema `required` 校验的调用先清洗参数再传给 handler，嵌套内容到不了 handler，真实环境下主要由"缺 `tool`"分支拦截；"工具名嵌进 args"错位形状识别保留为防御性分支（mock 测试直接调 handler 可达）。issue #1 的根因即旧宿主+旧插件组合下这类入参原样透传为 `params.name=undefined`，服务端报成晦涩的 `-32602`。结论：`required` 兜底不能依赖宿主，插件入口必须自带。
 8. **错误附调用上下文（1.1.3 落地）**：两类失败路径的错误消息追加 `called MCP tool: <server>/<tool>` + 实际发送的 `arguments` JSON（各截断 2000 字符），桥与 eager `execute` 两条路径共用一处实现：① 协议层 `tools/call` 失败（-32602/-32603/超时等，另附该工具 `inputSchema`）；② 服务端 `isError` 业务错误结果（不附 inputSchema——模型刚 `mcp_load` 过，上下文里已有 schema，错误里只补"实际发送了什么"这个增量）。真机实测：Tavily 对未知工具返回的是 `isError` 结果而非 JSON-RPC 错误，②是更常见的失败路径。代价：单次失败响应最多附加约 4 KB。
+9. **工具结果投影与宿主 `dsh-mcp-client` 相同（1.1.7）**：eager 与 `mcp_call` 的返回值是 `{ content, structuredContent? }`，`content` 为 MCP 原始内容块。模型看见的是 `render` 的文本投影，再由 `finalizeContent` 按原位置换上已准入的图片附件。准入条件与文案都跟宿主一致：PNG / JPEG / WebP / GIF、规范 base64、当前模型声明图像输入、附件库收下整批；任一图片不合格则整批不给看。音频和内嵌 resource 不进模型正文。`resource_link` 只给名字和 URI。`structuredContent` 留在返回值上，不再贴进正文。`isError` 只抛文本投影。`mcp_register` / `mcp_load` 仍是 `{ text }`。实现在 `lib/mcp-result.js`（宿主未导出这套函数）。eager 若带宿主认得出的 `outputSchema`，`structuredContent` 用那份 schema；`mcp_call` 固定宽松。
 
 | 维度             | 原生通道（eager）            | `mcp_call` 桥（on-demand）    |
 | ---------------- | ---------------------------- | ------------------------------- |
@@ -241,8 +242,8 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ### 5.9 启动注入（ContextInjector）
 
-- `agent/pre-step` enter 模式，source = `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`：**不声明宿主的结构化 form**——缺省/未知 form 由宿主按 OpaqueBody 渲染注入正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文（零双重标准，2026-09-07 已定）；source 也只有这两个成员——SourceFields 显示 source 全部字段，携带 entries 会把同一信息渲染两遍，而 released 迁移边的封闭 kind 审计只放行 `{kind, plugin}` + `form`/`sections`/`summary`，自定义 kind 与 `digest` 成员都会让历史日志打不开（2026-09-11 事故）。注入内容：所有非 disabled 档位的「名字 + (tier) + 描述 + notes（仅 on-demand）+ 启用工具名 + 工具描述」（描述/工具描述按 `catalogDescriptionMaxLength`/`toolDescriptionMaxLength` 截断）。数据源 = registry 快照（只读不连接）。
-- **判据是注入正文本身（2026-09-11 起）**：entries 投影（name/tier/description/notes/tools）唯一决定模型可见正文，而该正文已随消息 content 持久化，因此不再另存 digest。可见性判定用 `session.eventAt` 倒序遍历会话日志，取 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染出的正文逐字比对，相同则跳过——宿主 Session 没有 `events` 属性（公开 API 为 `eventAt`/`seq`/`snapshotEvents`），不读 `session.events`；source 不是本插件归属、或正文缺失/损坏的记录视为「非本插件目录」。正文变化才追加替换；是否已注入以会话 surface 上可见的目录消息为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加。
+- `agent/pre-step` enter 模式，source = `{kind:"plugin:dsh-skill-mcp-manager"}`：**不声明宿主的结构化 form**——缺省/未知 form 由宿主按 OpaqueBody 渲染注入正文原文，人类展开「上下文注入」卡片看到的就是模型收到的原文（零双重标准，2026-09-07 已定）；source 只有 `kind` 一个成员——SourceFields 显示 source 全部字段（`kind` 本身永远隐藏），携带 entries 会把同一信息渲染两遍，`digest` 成员则会让历史日志打不开（2026-09-11 事故）。**kind 用生产者自有写法（2026-09-28 事故教训）**：会话格式 v4 的**写入端**废弃了裸 `kind:"plugin"` + `plugin` 组合，`dsh-session-format-v3-to-v4` 的 `source()` 只收非空且不等于 `"plugin"` 的 kind，命中就在 `encodeEvent` 落盘时抛 `format v4 message requires a producer-owned source kind`（升到内核 0.1.7-rc.2 后本插件每轮注入因此失败，整轮对话挂掉）；`plugin:<插件名>` 正是内核 v3→v4 边对未登记第三方插件名的回退产物（`producerKind()`），旧日志迁移后与新写入逐字同形，所以按 `kind` 判等对两代日志都成立。卡片来源标签就是这个 kind 原样显示。注入内容：所有非 disabled 档位的「名字 + (tier) + 描述 + notes（仅 on-demand）+ 启用工具名 + 工具描述」（描述/工具描述按 `catalogDescriptionMaxLength`/`toolDescriptionMaxLength` 截断）。数据源 = registry 快照（只读不连接）。
+- **判据是注入正文本身（2026-09-11 起）**：entries 投影（name/tier/description/notes/tools）唯一决定模型可见正文，而该正文已随消息 content 持久化，因此不再另存 digest。可见性判定用 `session.eventAt` 倒序遍历会话日志，取 surface 上仍可见的最新一条本插件目录消息，把它的正文与此刻渲染出的正文逐字比对，相同则跳过——判据只看 `source.kind`；宿主 Session 没有 `events` 属性（公开 API 为 `eventAt`/`seq`/`snapshotEvents`），不读 `session.events`；source 不是本插件归属、或正文缺失/损坏的记录视为「非本插件目录」。正文变化才追加替换；是否已注入以会话 surface 上可见的目录消息为准（对齐内建 `skill-catalog`）：压缩把旧目录移出 surface 后，即使 registry 未变也重新追加。
 
 ### 5.10 系统配置 reconcile（防"删插件丢配置"，仅所在 profile）
 
@@ -276,7 +277,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 **完整工作流（阶段 0–7）**
 
-0. **写入端已经不会再生坏数据。** 1.1.5 起注入的 source 是 `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`，落在每条 released 迁移边的准入集合内，新会话在任何未来格式换代下都能打开。下面全是给 09-11 之前已落盘的那批用的。
+0. **写入端已经不会再生坏数据。** 注入的 source 是 `{kind:"plugin:dsh-skill-mcp-manager"}`（1.1.5–1.1.7 写的是 `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`，会话格式 v4 起被内核写入端拒绝，2026-09-28 改掉）：它既落在每条 released 迁移边的准入集合内，也是当前格式下唯一被接受的第三方插件写法。下面全是给 09-11 之前已落盘的那批用的。
 1. **启动：插件什么都不做。** `apply()` 只构造 `auditRunner`（存下 dataDir 与 sessions 根路径），不扫描、不排定时器、不 `await`。本机实测 `host-boot` 30.7 秒完成，看门狗 123 秒。
 2. **第一个 UI 请求触发（唯一触发点）。** 浏览器端 `useLegacyAudit()` 请求 `/skill-mcp-manager/session-audit`；handler 先 `auditRunner.kick()`（触发扫描但**不等它**，因为这个响应在页面加载路径上），再按**扫描是否真的在跑**作答：在跑 → `{scanning:true}`，客户端每 5 秒重问（上限 3 分钟）并显示「正在检查」；已经不用再扫（退休过、或本次已出结果）→ `{done:true, checked, …}`，界面保持安静。这里有两个必须区分的信号：**在扫 vs 不在扫**（否则一台永远不会再扫的机器会被显示成"正在检查"并且永远等不到结果），以及**本次进程到底跑没跑过**（`checked`，否则退休后每次开机都会把旧结论当新闻再报一遍）。`kick()` 每进程只跑一次。
 3. **门卫决定扫不扫。** 读到的记录里 `check` 是唯一开关：不是显式 `true` → 直接返回，**连扫都不扫**、什么都不提示；是 `true` → 开扫。
@@ -308,7 +309,7 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 
 ## 6. 注入与 KV 缓存设计（统一原则）
 
-1. 只追加不改写；注入正文变化驱动；source kind：内建 `skill-catalog`（`dsh-tool-skill`，自带 kind 与 `form:"catalog"`），本插件用通用插件归属 `{kind:"plugin", plugin:"dsh-skill-mcp-manager"}`（不带 form/digest，按注入正文判等，理由见 §5.9）。两者都以会话 surface 上是否还有可见目录判断是否重注；压缩后旧目录不在 surface 上则重新追加。
+1. 只追加不改写；注入正文变化驱动；source kind：内建 `skill-catalog`（`dsh-tool-skill`，自带 kind 与 `form:"catalog"`），本插件用生产者自有 kind `{kind:"plugin:dsh-skill-mcp-manager"}`（不带 form/digest，按注入正文判等，理由见 §5.9）。两者都以会话 surface 上是否还有可见目录判断是否重注；压缩后旧目录不在 surface 上则重新追加。
 2. 前缀失效仅发生在"模型可见工具 schema 集合运行中变化"（§5.6 总表）；注入消息永远只走尾部追加。
 
 ---
