@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [1.2.1] — 2026-10-03
+
+### Fixed
+
+- **peer 声明放宽，兼容 dsh 内核 0.2.0-rc 系列**：`@deepseek-ai/dsh-llm` 与 `@deepseek-ai/dsh-tools` 两个 peer 从 `^0.1.0-rc.6` 放宽为 `^0.1.0-rc.6 || ^0.2.0-rc.1`。宿主启动门控对每个 `@deepseek-ai/dsh-*` peer 做 `semver.satisfies(runtime, range, { includePrerelease: true })` 比对，caret 上界 `<0.2.0-0` 把 `0.2.0-rc.2` 挡在门外——DSH Desktop 2.0.17（内核 `0.2.0-rc.2`）上 1.2.0 每次启动都被静默跳过（激活报告显示「已安装，与当前 dsh 不兼容」，重启也无法加载），SKILL/MCP 管理整体失效。仅放宽声明、不改任何代码；0.1.x 与 0.2.x 两个系列都覆盖。
+
 ## [1.2.0] — 2026-09-28
 
 ### Added
