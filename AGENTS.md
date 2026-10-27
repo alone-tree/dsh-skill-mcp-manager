@@ -41,7 +41,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **RPC = 同源 HTTP 路由**：Host 用 `ctx.webServer.register({kind:"exact", path, handler})`，Client 用 `fetch("/skill-mcp-manager/...")`。
   - `webServer` 是**惰性注册**的服务：必须用 `ctx.inject(["webServer"], (hostCtx) => ...)` 等待，不能同步 `ctx.get("webServer")`（会取到 undefined，路由不注册 → 浏览器拿到 SPA fallback 而非 JSON）。
   - `webServer.register` 对重复 `(kind, path)` 抛错：**GET 和 POST 不能各注册一条同 path 路由**，要合并成一条、handler 内按 `request.method` 分发（见 `/settings` 的实现）。
-- 浏览器发起的路由（请求带 `Origin`）无论读还是写，都要同源，并且主机名是 localhost、本机名或 IP 字面量；局域网主机名走设置里的允许名单。不带 `Origin` 的 POST 仍只校验 `sameOrigin(request)`。`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
+- 浏览器发起的路由（请求带 `Origin`）无论读还是写，都要同源，并且主机名是 localhost、本机名或 IP 字面量；局域网主机名走设置里的允许名单。Desktop 的 `dsh-app://app` 转发会删除 `Origin` 和 `Sec-Fetch-Site`，所以客户端 POST 统一带 `x-dsh-skill-mcp-manager: 1`。不带 `Origin` 的 POST 必须同时满足该标记、JSON Content-Type、主机名允许规则，以及缺省或 `same-origin` 的 `Sec-Fetch-Site`；不带 `Origin` 的 GET 保持原样。自定义头依靠浏览器 CORS 预检形成 CSRF 边界，路由不得放开跨源预检；标记不是身份认证，也不能仅凭 cookie 或 `dsh-app://app` 字符串放行。`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
 
 ### 数据
 
@@ -104,16 +104,16 @@ node test/schema-check.mjs     # 工具 schema 校验
 node test/skill-smoke.mjs      # 递归 provider
 node test/watcher-smoke.mjs    # watcher 热生效
 node test/import-smoke.mjs     # 原生导入 + 接管（隔离 DSH_HOME，勿连真实网络）
-node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径 + settings 的 stdioMaxBufferSizeMb round-trip
+node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject + settings round-trip + 客户端 Desktop POST
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
-node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
+node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、Web/Desktop 刷新快照不共享实例
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 node test/mcp-result-smoke.mjs # MCP 工具结果投影：文本、图片准入、resource/audio、structuredContent
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
-node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器主机名、本地命令审批、常驻失败降级、备份保留 5 份
+node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器/Desktop CSRF 与主机名、本地命令审批、常驻失败降级、备份保留 5 份
 node test/stdio-transport-smoke.mjs # stdio 超限优雅拒绝：流状态机（无子进程）+ e2e 节需真实运行时（沙箱 spawn EPERM 自动跳过）
 
 # 装进 desktop profile —— 本机当前是 npm 托管的精确版本（跟随市场安装），不是 link:

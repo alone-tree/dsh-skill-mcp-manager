@@ -164,6 +164,49 @@ async function dispose(effects) {
   check(noOriginGet.status === 200, "non-browser GET was rejected");
   const noOriginPost = await callRoute(routes, "/skill-mcp-manager/mcp/delete", "POST", {}, { name: "missing" });
   check(noOriginPost.status === 403, "non-browser POST without origin was allowed");
+  // Desktop forwards dsh-app://app through Node fetch, removing Origin and
+  // Sec-Fetch-Site. Our non-safelisted header survives that forwarding.
+  const desktop = {
+    host: "127.0.0.1:7404",
+    "content-type": "application/json",
+    "x-dsh-skill-mcp-manager": "1",
+  };
+  const desktopSave = await callRoute(routes, "/skill-mcp-manager/settings", "POST", desktop, {
+    toolDescriptionMaxLength: 321,
+  });
+  check(desktopSave.status === 200 && desktopSave.body.toolDescriptionMaxLength === 321,
+    `desktop settings POST failed: ${JSON.stringify(desktopSave)}`);
+  if (desktopSave.status === 200) {
+    const persisted = JSON.parse(await readFile(join(dataDir, "settings.json"), "utf8"));
+    check(persisted.toolDescriptionMaxLength === 321, "desktop settings POST did not persist");
+  }
+  for (const [label, headers] of [
+    ["missing marker", { host: desktop.host, "content-type": "application/json" }],
+    ["wrong marker", { ...desktop, "x-dsh-skill-mcp-manager": "0" }],
+    ["missing host", { "x-dsh-skill-mcp-manager": "1", "content-type": "application/json" }],
+    ["unlisted host", { ...desktop, host: "files.example:7404" }],
+    ["cross-site metadata", { ...desktop, "sec-fetch-site": "cross-site" }],
+    ["same-site metadata", { ...desktop, "sec-fetch-site": "same-site" }],
+    ["form content type", { ...desktop, "content-type": "application/x-www-form-urlencoded" }],
+    ["null origin", { ...desktop, origin: "null" }],
+    ["malformed origin", { ...desktop, origin: "not-a-url" }],
+    ["cross origin", { ...desktop, origin: "http://other.example:7404" }],
+    ["different port", { ...desktop, origin: "http://127.0.0.1:7405" }],
+    ["raw desktop origin", { ...desktop, origin: "dsh-app://app" }],
+  ]) {
+    const denied = await callRoute(routes, "/skill-mcp-manager/settings", "POST", headers, {
+      toolDescriptionMaxLength: 999,
+    });
+    check(denied.status === 403, `${label} bypassed the origin guard: ${denied.status}`);
+  }
+  const unchanged = await callRoute(routes, "/skill-mcp-manager/settings", "GET", local);
+  check(unchanged.body.toolDescriptionMaxLength === 321, "rejected requests changed settings");
+  const preflight = await callRoute(routes, "/skill-mcp-manager/mcp/load", "OPTIONS", {
+    origin: "http://other.example", host: desktop.host,
+    "access-control-request-method": "POST",
+    "access-control-request-headers": "x-dsh-skill-mcp-manager",
+  });
+  check(preflight.status === 405, "cross-origin custom-header preflight was allowed");
   const evil = await callRoute(routes, "/skill-mcp-manager/mcp", "GET", { origin: "http://files.example:7404", host: "files.example:7404" });
   check(evil.status === 403, "DNS-rebound hostname was allowed");
   const saved = await callRoute(routes, "/skill-mcp-manager/settings", "POST", local, {

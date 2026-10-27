@@ -2,6 +2,12 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **Desktop 管理页刷新快照不再误报 `untrusted origin`**：新版桌面壳将 `dsh-app://app` 请求转发到 Host 时会删除 `Origin`，原守卫因此拒绝全部 POST。客户端现在附带专用的非 CORS 简单请求头；无 Origin 的 JSON POST 需通过标记、Host 允许名单与 Fetch Metadata 检查，才可刷新 MCP 工具快照、保存设置或执行其他管理操作。带 Origin 的浏览器请求继续强制同源，跨站、空来源、缺标记及不受信任的主机仍拒绝。回归覆盖真实客户端保存操作、无 Origin 的 MCP 试连/工具快照持久化、会话实例隔离，以及跨站与预检拒绝。
+
 ## [1.2.2] — 2026-10-03
 
 ### Changed
