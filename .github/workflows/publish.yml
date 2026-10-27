@@ -43,6 +43,7 @@ jobs:
           node test/watcher-smoke.mjs
           node test/import-smoke.mjs
           node test/ui-smoke.mjs
+          node test/desktop-origin-smoke.mjs
           node test/frontmatter-smoke.mjs
           node test/catalog-smoke.mjs
           node test/tool-disable-smoke.mjs

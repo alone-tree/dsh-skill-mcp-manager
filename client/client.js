@@ -22,7 +22,9 @@ window.__ModuleLoader__.load({ id: "dsh-skill-mcp-manager", factory: (require) =
   async function postJson(path, body) {
     const res = await fetch(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      // Desktop's dsh-app://app proxy strips Origin. This non-safelisted
+      // header survives forwarding and lets the host enforce CSRF protection.
+      headers: { "content-type": "application/json", "x-dsh-skill-mcp-manager": "1" },
       cache: "no-store",
       body: JSON.stringify(body ?? {}),
     });

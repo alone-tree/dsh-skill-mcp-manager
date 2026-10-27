@@ -2,7 +2,7 @@
 // process; a call in A does not see B's runtime, disposing A does not drop B,
 // and UI snapshot refresh does not leave a shared live instance.
 
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { apply } from "../lib/index.js";
 
@@ -98,13 +98,13 @@ function makeAgent() {
   return agent;
 }
 
-function makeReq(path, body) {
+function makeReq(path, body, headers = { origin: "http://127.0.0.1:7404", host: "127.0.0.1:7404" }) {
   const chunks = [Buffer.from(JSON.stringify(body), "utf8")];
   let index = 0;
   return {
     method: "POST",
     url: path,
-    headers: { origin: "http://127.0.0.1:7404", host: "127.0.0.1:7404" },
+    headers,
     [Symbol.asyncIterator]() {
       return { async next() { return index < chunks.length ? { value: chunks[index++], done: false } : { done: true }; } };
     },
@@ -169,6 +169,20 @@ try {
   await loadRoute.handler(makeReq("/skill-mcp-manager/mcp/load", { name: "demo" }), res);
   const body = res.body ? JSON.parse(res.body) : {};
   if (res.status !== 200 || body.ok !== true) failed.push(`refresh snapshot failed: ${body.error || res.status}`);
+  const desktopRes = makeRes();
+  await loadRoute.handler(makeReq("/skill-mcp-manager/mcp/load", { name: "demo" }, {
+    host: "127.0.0.1:7404",
+    "content-type": "application/json",
+    "x-dsh-skill-mcp-manager": "1",
+  }), desktopRes);
+  const desktopBody = desktopRes.body ? JSON.parse(desktopRes.body) : {};
+  if (desktopRes.status !== 200 || desktopBody.ok !== true) {
+    failed.push(`desktop refresh snapshot failed: ${desktopBody.error || desktopRes.status}`);
+  }
+  const saved = JSON.parse(await readFile(join(dataDir, "registry.json"), "utf8"));
+  if (!saved.entries[0].tools.some((tool) => tool.name === "whoami" && tool.inputSchema?.type === "object")) {
+    failed.push("snapshot refresh did not persist tool definitions");
+  }
   const stillBAfterRefresh = await callText(agentB);
   if (stillBAfterRefresh !== idB) failed.push(`snapshot refresh replaced B's instance: ${stillBAfterRefresh}`);
 } finally {

@@ -2,6 +2,16 @@
 
 All notable changes to dsh-skill-mcp-manager (能力库 / Capability) are documented here.
 
+## [Unreleased]
+
+### Tests
+
+- **Desktop 刷新快照的可复现验证**：新增 `test/desktop-origin-smoke.mjs`，通过真实 loopback HTTP、stdio MCP 夹具和快照落盘断言覆盖无 Origin 的请求；可选 `--desktop-asar` 直接运行本机安装包里的转发函数。可移植模式加入发布基线。`test/desktop-origin.zh.md` 收录自动化命令、GUI 手动验收、安装/重启检查和 2026-10-27 问题报告者确认的 GUI 测试成功记录；区分来源守卫与 MCP 凭证错误。
+
+### Fixed
+
+- **Desktop 管理页刷新快照不再误报 `untrusted origin`**：新版桌面壳将 `dsh-app://app` 请求转发到 Host 时会删除 `Origin`，原守卫因此拒绝全部 POST。客户端现在附带专用的非 CORS 简单请求头；无 Origin 的 JSON POST 需通过标记、Host 允许名单与 Fetch Metadata 检查，才可刷新 MCP 工具快照、保存设置或执行其他管理操作。带 Origin 的浏览器请求继续强制同源，跨站、空来源、缺标记及不受信任的主机仍拒绝。回归覆盖真实客户端保存操作、无 Origin 的 MCP 试连/工具快照持久化、会话实例隔离，以及跨站与预检拒绝。
+
 ## [1.2.2] — 2026-10-03
 
 ### Changed

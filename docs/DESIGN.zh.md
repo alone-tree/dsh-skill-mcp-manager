@@ -321,7 +321,8 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
   - **SKILL 管理**：列表（名字 / 描述 / 路径，**按路径排序**）；头部计数「N 个技能 · 模型可见 M 个」（M 按行内 `modelInvocable` 过滤，前端计算，随启停刷新）；行内启停 Switch 成功后只在当前列表更新对应行，不全量刷新、不显示成功提示，保持滚动位置；点击条目 → 系统编辑器打开（§4.2）；删除按钮（整个 SKILL 文件夹，跨平台回收站/trash，二次确认）；"添加外接目录"（`ctx.directoryPicker`）。
   - **工具（MCP）管理**：注册表列表（档位徽标、调用通道 Native/Bridge、工具数、notes、reconcile 状态）→ 详情（工具表格、描述、schema 查看、备注编辑、密钥打码/显示；每个工具名前有“启用/禁用”二档下拉框，启用为正常文字、禁用后下拉框/名称/描述变灰）→ "查看描述"(=peek 只读快照)、"刷新快照"（一次性试连并更新 registry，不留下实例）、档位切换（立即对存活会话生效；升级时弹窗提示"一次前缀失效"、无需二次确认）、**删除条目（仅 UI；= registry + patch 整条 entry 一起删，非翻 disabled、非只删一行）**、"/mcp prepare-uninstall"（= 卸载整个插件时交还原生）。
 - 入口：`sidebar.footer.action` + `/skills`、`/mcp` 命令；状态同步经 RPC 推送。
-- **浏览器请求的地址检查**（2026-09-24）：带 `Origin` 的读和写都必须同源，并且主机名是 `localhost`、本机名或 IP 字面量。局域网主机名放在插件设置的允许名单里，默认空；不在名单里的主机名打不开这些接口，也就不能自己把自己加进去。不带 `Origin` 的调用保持原样（POST 仍要同源，GET 不额外拦截）。设置页同一处还有「模型登记本地程序」三档。常驻连接失败时，列表在档位旁边显示「连接失败，按按需处理」。
+- **浏览器请求的地址检查**（2026-09-24；2026-10-27 补充 Desktop 转发兼容）：带 `Origin` 的读和写都必须同源，并且主机名是 `localhost`、本机名或 IP 字面量。局域网主机名放在插件设置的允许名单里，默认空；不在名单里的主机名打不开这些接口，也就不能自己把自己加进去。Desktop 页面使用 `dsh-app://app`，壳先检查来源，再通过 Node fetch 转发到 Host，主动删除 `Origin` 和 `Sec-Fetch-Site`。客户端 POST 统一增加非 CORS 简单请求头 `x-dsh-skill-mcp-manager: 1`；Host 仅对无 `Origin` 的 POST 使用此回退：必须有正确标记、`application/json` Content-Type（可带 charset）、允许的 Host，且 `Sec-Fetch-Site` 缺省或为 `same-origin`。浏览器跨源脚本需要预检才能发送该头，插件不放行跨源预检；不能把该标记当身份认证，不能仅凭 cookie、缺少 Origin 或字面 `dsh-app://app` 放行。带 Origin 时仍走原有同源规则，回退不会覆盖显式的错误来源；无 Origin 的 GET 保持原样。设置页同一处还有「模型登记本地程序」三档。常驻连接失败时，列表在档位旁边显示「连接失败，按按需处理」。
+- **Desktop 回归验证**：`test/desktop-origin-smoke.mjs` 默认模拟桌面请求头转换，实际经过 loopback HTTP、插件路由与无凭证 stdio MCP 子进程，并断言旧工具被替换、schema/元信息落盘；使用 `--desktop-asar` 时直接提取并执行本机安装包中的转发函数，不静默降级。两种模式均在导入插件前设置临时 `DSH_HOME`，使用隔离临时数据与 `__test__` profile，不连接真实 Host；真实 GUI 点击需另按 `test/desktop-origin.zh.md` 手动验收，确认已安装正确代码并完整重启。可移植模式列入发布基线。
 
 ---
 
@@ -481,4 +482,3 @@ tmp/               # 插件内部临时文件（AI 不直接引用；无 args_fi
 - 运行时组合：`C:\Users\Zinger\.dsh\profiles\{web,desktop}\cordis.patch.yml`。
 - Slots 树（client Inspect）：`settings.section`、`sidebar.footer.action`。
 - 用户参考实现（桥接 args 文件 workaround 的教训来源）：[alone-tree/Capability-Library](https://github.com/alone-tree/Capability-Library)。
-

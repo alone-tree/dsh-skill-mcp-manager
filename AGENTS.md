@@ -22,6 +22,8 @@ lib/session-audit.js 历史会话审核（一次性，只读）：切帧 + 逐�
 client/client.js 浏览器端（__ModuleLoader__.load 单文件 bundle，纯 JS React）
 tools/repair-legacy-sessions.mjs 历史会话的一次性修复脚本：仓库里只此一份，issue #2 指向它；**不随 npm 包发布**（.npmignore 排除），只能从 GitHub 取
 test/*.mjs      单元/冒烟测试（发布基线见下方显式清单；e2e-playwright.mjs 需真实运行时，不属于发布基线）
+test/desktop-origin.zh.md Desktop 刷新快照：无 GUI 回归、真实 ASAR 转发函数验证、GUI 手动验收步骤与记录
+test/fixtures/desktop-origin-server.mjs 无凭证 stdio MCP 夹具，供集成测试与可选 GUI 验收使用
 IDEAS.md        未实现想法
 CHANGELOG.md    已实现变更日志（最新在最上）
 docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图；专题见 docs/专题/（已实现：安全与正确性改动-2026-09-24；已归档：按会话隔离MCP实例-2026-08-31-已归档）
@@ -41,7 +43,7 @@ docs/           程序架构（DESIGN.zh.md）、交接（HANDOFF.md）、截图
 - **RPC = 同源 HTTP 路由**：Host 用 `ctx.webServer.register({kind:"exact", path, handler})`，Client 用 `fetch("/skill-mcp-manager/...")`。
   - `webServer` 是**惰性注册**的服务：必须用 `ctx.inject(["webServer"], (hostCtx) => ...)` 等待，不能同步 `ctx.get("webServer")`（会取到 undefined，路由不注册 → 浏览器拿到 SPA fallback 而非 JSON）。
   - `webServer.register` 对重复 `(kind, path)` 抛错：**GET 和 POST 不能各注册一条同 path 路由**，要合并成一条、handler 内按 `request.method` 分发（见 `/settings` 的实现）。
-- 浏览器发起的路由（请求带 `Origin`）无论读还是写，都要同源，并且主机名是 localhost、本机名或 IP 字面量；局域网主机名走设置里的允许名单。不带 `Origin` 的 POST 仍只校验 `sameOrigin(request)`。`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
+- 浏览器发起的路由（请求带 `Origin`）无论读还是写，都要同源，并且主机名是 localhost、本机名或 IP 字面量；局域网主机名走设置里的允许名单。Desktop 的 `dsh-app://app` 转发会删除 `Origin` 和 `Sec-Fetch-Site`，所以客户端 POST 统一带 `x-dsh-skill-mcp-manager: 1`。不带 `Origin` 的 POST 必须同时满足该标记、JSON Content-Type、主机名允许规则，以及缺省或 `same-origin` 的 `Sec-Fetch-Site`；不带 `Origin` 的 GET 保持原样。自定义头依靠浏览器 CORS 预检形成 CSRF 边界，路由不得放开跨源预检；标记不是身份认证，也不能仅凭 cookie 或 `dsh-app://app` 字符串放行。`readJsonBody` 读 body，`sendJson` 统一 JSON 响应。
 
 ### 数据
 
@@ -104,16 +106,17 @@ node test/schema-check.mjs     # 工具 schema 校验
 node test/skill-smoke.mjs      # 递归 provider
 node test/watcher-smoke.mjs    # watcher 热生效
 node test/import-smoke.mjs     # 原生导入 + 接管（隔离 DSH_HOME，勿连真实网络）
-node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject 路径 + settings 的 stdioMaxBufferSizeMb round-trip
+node test/ui-smoke.mjs         # HTTP 路由 + 只读护栏 + ctx.inject + settings round-trip + 客户端 Desktop POST
+node test/desktop-origin-smoke.mjs # Desktop 转发契约 + 真实 HTTP/stdio + 快照落盘；真实 ASAR/GUI 方法见 test/desktop-origin.zh.md
 node test/frontmatter-smoke.mjs# frontmatter 启停写入
 node test/catalog-smoke.mjs     # 压缩后 mcp-catalog 按 surface 重注
 node test/tool-disable-smoke.mjs# 单工具黑名单：隐藏、原生注册过滤、桥/旧 execute 拒绝、UI 持久化
-node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、刷新快照不共享实例
+node test/session-isolate-smoke.mjs# 会话级 MCP 实例隔离：双会话进程、销毁互不影响、Web/Desktop 刷新快照不共享实例
 node test/mcp-call-guard-smoke.mjs # mcp_call 参数形状守卫 + 工具调用错误上下文（桥与 eager 双路径）
 node test/mcp-result-smoke.mjs # MCP 工具结果投影：文本、图片准入、resource/audio、structuredContent
 node test/mcp-load-schema-smoke.mjs # mcp_load（load/peek）与 registry 快照包含 inputSchema
 node test/session-audit-smoke.mjs# 历史会话审核：候选筛选、扫到 0 静默退休、受影响保持重扫
-node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器主机名、本地命令审批、常驻失败降级、备份保留 5 份
+node test/security-smoke.mjs   # 环境过滤、$NAME 展开、浏览器/Desktop CSRF 与主机名、本地命令审批、常驻失败降级、备份保留 5 份
 node test/stdio-transport-smoke.mjs # stdio 超限优雅拒绝：流状态机（无子进程）+ e2e 节需真实运行时（沙箱 spawn EPERM 自动跳过）
 
 # 装进 desktop profile —— 本机当前是 npm 托管的精确版本（跟随市场安装），不是 link:
@@ -145,7 +148,7 @@ pnpm add "dsh-skill-mcp-manager@<精确版本>"           # 托管模式（市�
 
 - **启动看门狗约 120 秒：`apply()` 里既不能 `await` 慢操作，也不能用短延时定时器绕开**（2026-09-14 两次把 DSH 打进安全模式）：桌面端 host 对 `host-boot` 阶段有约 123 秒看门狗（实测 `lifecycle-events/startup.jsonl` 的 `stage.failed durationMs=123058`），超时即判失败进安全模式。插件的 `apply()` 发生在**启动早期**，所以"`await` 进 `apply()`"和"`setTimeout(8000)` 之后跑"**都落在这个窗口里**——本插件的一次 30–136 秒历史会话审计两种排法都试过，两次都进安全模式；而且扫描重到会被看门狗杀掉，记录写不进去，下次启动又重扫，形成死循环。排查信号：host 日志里**连 `skill-mcp-manager: ready` 都没有**。规则：启动路径只做必要且快的事；任何重活都不要按"启动后 N 秒"排，要挂到**明确晚于 boot 的事件**上（本插件用的是第一个 UI 请求）。同类坑还有 2026-09-11 的"单个插件加载失败 → 整棵插件树失败 → 安全模式"。
 - **`file:` 依赖是拷贝，改源码后重启 DSH 完全无效**（2026-09-11 实际踩到，本机一度跑着一周前的代码）：profile 里 `file:` 装的插件是**真实文件副本**，仓库源码改动不会跟过去。本机 desktop profile 曾改为 `link:`（pnpm 在 Windows 上把它实现为 **Junction**，同 profile 的 `dsh-pocket` 也是这个形态，改源码后重启 DSH 即生效），**现已回到 npm 托管的精确版本**（跟随市场安装）——源码改动同样不跟随，开发调试时再临时换回 `link:`。`link:` 两点注意：① `link:` 后插件从**源目录**解析依赖，仓库自己的 `node_modules` 必须装齐（含 peerDeps，用 `pnpm install --config.auto-install-peers=true`），宿主的 `@deepseek-ai/*` 仍由 DSH 加载器按 specifier 提供，不受物理位置影响；② pnpm 会把该插件的依赖树从 profile 的锁文件里移除（本机实测 779 行删除 / 2 行新增），属预期。
-- **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。同一个 `__test__` 哨兵也被历史会话审核用来跳过扫描——否则每个调用 `apply()` 的测试都会去读真实的 `~/.dsh/sessions`（本机实测每个测试多花 30–50 秒，且违反隔离约定）。
+- **测试不能碰真实 profile**：测试里 `profile` 用 `"__test__"`（不存在）且 `importNativeMcp: false`，否则 `importNative`/`reconcile` 会读写真实 `~/.dsh/profiles/web|desktop/cordis.patch.yml`（历史上污染过一次）。同一个 `__test__` 哨兵也被历史会话审核用来跳过扫描——否则每个调用 `apply()` 的测试都会去读真实的 `~/.dsh/sessions`（本机实测每个测试多花 30–50 秒，且违反隔离约定）。 新增调用 `apply()` 的测试还必须先把 `process.env.DSH_HOME` 指向临时目录，再动态导入 `lib/index.js`；该路径在模块导入时捕获，单靠 `__test__` 和 `importNativeMcp: false` 不能阻止 `reconcile()` 探测或重写同名 profile 的 patch。参见 `test/desktop-origin-smoke.mjs`。
 - **import-smoke 的 MCP URL 用本地死端口**（`http://127.0.0.1:1/`）：预热会尝试连接，别让它真连外部服务。
 - **前端加了新的 GET+POST 同 path 路由**：必须合并成单条 handler（见上文）。
 - **bundle 自动挂载 + 用户补丁旧 insert 行 = 组合无法启动**（2026-08-28 实际发生过）：包自带的 `cordis.patch.yml`（`dsh.bundle.patch`）会自动 insert 挂载行；从手动挂载时代升级过来的 profile 若还留着同 id 的手写 insert 行，组合里出现两行同 id，所有插件更新的 trial 校验都会失败回滚，且**下次重启无法启动**。修复：用户补丁里改成同 id 的纯配置覆盖行（不写 insert）。本机 desktop profile 已于 2026-08-28 修复并校验通过。

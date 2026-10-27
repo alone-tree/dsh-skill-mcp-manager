@@ -6,6 +6,8 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { apply } from "../lib/index.js";
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", ".test-data");
@@ -278,6 +280,57 @@ for (const path of ["/skill-mcp-manager/skills", "/skill-mcp-manager/skills/togg
   console.log("inject-path routes:", paths.join(", "));
   if (!paths.includes("/skill-mcp-manager/skills") || !paths.includes("/skill-mcp-manager/mcp")) {
     failed.push("inject path did not register the skill/mcp routes");
+  }
+}
+
+// Execute the shipped client bundle and click its settings Save button. The
+// fetch adapter mirrors Desktop: Host is rewritten, Origin/Sec-Fetch-Site are
+// absent, and application headers/body reach the real registered route.
+{
+  let client;
+  let section;
+  const posts = [];
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+    useState: (initial) => [initial, () => {}],
+    useEffect() {},
+    useCallback: (callback) => callback,
+  };
+  runInNewContext(await readFile(new URL("../client/client.js", import.meta.url), "utf8"), {
+    window: { __ModuleLoader__: { load({ factory }) { client = factory(() => react); } } },
+    async fetch(path, options) {
+      const headers = Object.fromEntries(new Headers(options.headers));
+      const body = JSON.parse(options.body);
+      const request = makeReq(options.method, path, body);
+      request.headers = { ...headers, host: "127.0.0.1:7404" };
+      const response = makeRes();
+      await routeByPath(path).handler(request, response);
+      posts.push({ path, headers, body, status: response.status });
+      return { ok: response.status === 200, status: response.status, json: async () => bodyOf(response) };
+    },
+  });
+  client.apply({ slots: {
+    inject(_name, callback) { callback(); },
+    register(slot, component) { if (slot.name === "settings.section") section = component; },
+  } });
+  function findSave(node) {
+    if (node == null || typeof node !== "object") return undefined;
+    if (Array.isArray(node)) return node.map(findSave).find(Boolean);
+    if (typeof node.type === "function") return findSave(node.type(node.props));
+    if (node.type === "button" && node.props.children.includes("保存")) return node;
+    return findSave(node.props.children);
+  }
+  const save = findSave(section());
+  if (!save) failed.push("client settings Save button missing");
+  else {
+    const settingsRoute = routeByPath("/skill-mcp-manager/settings");
+    await settingsRoute.handler(makeReq("POST", settingsRoute.path, { localCommandApproval: "always-ask" }), makeRes());
+    await save.props.onClick();
+    if (posts.length !== 1 || posts[0].status !== 200) failed.push(`desktop client save failed: ${JSON.stringify(posts)}`);
+    if (posts[0]?.headers["x-dsh-skill-mcp-manager"] !== "1") failed.push("client POST omitted its CSRF header");
+    const current = makeRes();
+    await settingsRoute.handler(makeReq("GET", settingsRoute.path), current);
+    if (bodyOf(current).localCommandApproval !== "follow") failed.push("desktop client save did not update settings");
   }
 }
 
